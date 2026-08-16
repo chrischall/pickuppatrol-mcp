@@ -72,3 +72,36 @@ describe('packaging', () => {
     expect(plugin.skills).toBe('./skills/');
   });
 });
+
+describe('manifest tool roster', () => {
+  // manifest.json's `tools` array is what an mcpb host shows at install time,
+  // so a tool missing from it is invisible to the user even though the server
+  // registers it. Nothing else catches the drift: the server starts fine, the
+  // tool works when called by name, and no other test reads this file.
+  // pup_list_car_numbers was absent for exactly that reason.
+  it('lists every tool the server actually registers, and no others', async () => {
+    const { createTestHarness } = await import('@chrischall/mcp-utils/test');
+    const { makeClient } = await import('./helpers.js');
+    const { registerAccountTools } = await import('../src/tools/account.js');
+    const { registerSchoolTools } = await import('../src/tools/school.js');
+    const { registerPlanTools } = await import('../src/tools/plans.js');
+    const { registerDefaultPlanTools } = await import('../src/tools/defaults.js');
+
+    const client = makeClient();
+    const h = await createTestHarness((s) => {
+      registerAccountTools(s, client);
+      registerSchoolTools(s, client);
+      registerPlanTools(s, client);
+      registerDefaultPlanTools(s, client);
+    });
+    const registered = (await h.listTools()).map((t) => t.name).sort();
+    await h.close();
+
+    const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8')) as {
+      tools: { name: string; description: string }[];
+    };
+    expect(manifest.tools.map((t) => t.name).sort()).toEqual(registered);
+    // A blank description is as useless to the install UI as a missing entry.
+    for (const tool of manifest.tools) expect(tool.description.trim()).not.toBe('');
+  });
+});

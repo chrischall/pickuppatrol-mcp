@@ -91,6 +91,10 @@
       "description": "Dates a plan cannot be set for, and dates that already differ from the default"
     },
     {
+      "name": "pup_list_car_numbers",
+      "description": "Car numbers the school issued to this account"
+    },
+    {
       "name": "pup_set_plan",
       "description": "Change or clear the dismissal plan for one or more dates"
     },
