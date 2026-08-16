@@ -26,6 +26,12 @@ export {
   type PlanInput,
   type DefaultPlanInput,
 } from './plans.js';
-export { dayIdToName, nameToDayId, dateToDayId, WEEKDAY_NAMES, type WeekdayName } from './dates.js';
+export {
+  expectedPlanState,
+  proofsMatch,
+  resolveTransportation,
+  type PlanProof,
+} from './tools/plans.js';
+export { dayIdToName, nameToDayId, dateToDayId, weekdayOf, WEEKDAY_NAMES, type WeekdayName } from './dates.js';
 export { VERSION } from './version.js';
 export type * from './types.js';

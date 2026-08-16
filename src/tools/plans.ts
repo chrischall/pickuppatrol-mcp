@@ -3,29 +3,40 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpToolError, textResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
-import { dateToDayId, weekdayOf } from '../dates.js';
-import type { PlanUpdate, Student, Transportation } from '../types.js';
+import { weekdayOf } from '../dates.js';
+import type { PlanUpdate, Transportation } from '../types.js';
 import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { withHints } from './_errors.js';
 
+/** The fields whose change proves a plan write actually landed. */
+export interface PlanProof {
+  transportationId: number | null;
+  note: string | null;
+}
+
+/** Compare two proofs, ignoring whitespace the service may normalise off a note. */
+export function proofsMatch(a: PlanProof, b: PlanProof): boolean {
+  return a.transportationId === b.transportationId && (a.note ?? '').trim() === (b.note ?? '').trim();
+}
+
 /**
- * The transportation id a date should show once a write has landed.
+ * What `GetPlanEdit` should report once a write has landed.
  *
- * For a normal change that is the id we asked for. For a revert
- * (`TransportationId: null`) the date falls back to the student's default for
- * that weekday, so the id to expect is that default's — and when the student
- * has no default for the day there is nothing to assert, hence `undefined`.
+ * Deliberately more than the transportation id: every dismissal option at the
+ * schools seen so far requires a note, so changing only the note is an ordinary
+ * edit — and an id-only comparison would report success without ever observing
+ * it. Same false-green as diffing a field that cannot move.
+ *
+ * A revert expects an EMPTY slot, not the weekday default. `GetPlanEdit`
+ * reports the date's override, not the effective plan: verified live on a
+ * Friday where the student had a Friday default and the date still read back
+ * `TransportationId: null`. Expecting the default here would report every
+ * successful revert as a failure.
  */
-export function expectedTransportationId(
-  student: Student,
-  planDate: string,
-  requested: number | null,
-): number | null | undefined {
-  if (requested !== null) return requested;
-  const dayId = dateToDayId(planDate);
-  if (dayId === null) return undefined;
-  const fallback = (student.DefaultPlans ?? []).find((plan) => plan.DayId === dayId);
-  return fallback === undefined ? undefined : (fallback.TransportationId ?? null);
+export function expectedPlanState(requested: PlanProof): PlanProof {
+  return requested.transportationId === null
+    ? { transportationId: null, note: null }
+    : requested;
 }
 
 /** Resolve a transportation id against the school's list, or fail with the options. */
@@ -139,25 +150,32 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       // compare the one field that proves it. ModifiedDate is deliberately not
       // compared: it advances on its own, which would make every write look
       // successful.
+      const requestedState: PlanProof = {
+        transportationId: transportation_id,
+        note: plans[0]?.Note ?? null,
+      };
       const verification = await Promise.all(
         dates.map(async (date) => {
           const after = await client.getPlanEdit(date, student_id);
-          const expected = expectedTransportationId(student, date, transportation_id);
-          const actual = after.TransportationId ?? null;
+          const expected = expectedPlanState(requestedState);
+          const actual: PlanProof = {
+            transportationId: after.TransportationId ?? null,
+            note: after.Note ?? null,
+          };
           return {
             date,
             weekday: weekdayOf(date),
-            transportationId: actual,
+            transportationId: actual.transportationId,
             transportation: after.TransportationName ?? null,
-            note: after.Note ?? null,
+            note: actual.note,
             earlyDismissalTime: after.EarlyDismissalTime ?? null,
             locked: after.IsLocked ?? false,
-            verified: expected === undefined ? null : actual === expected,
+            verified: proofsMatch(actual, expected),
           };
         }),
       );
 
-      const failed = verification.filter((v) => v.verified === false);
+      const failed = verification.filter((v) => !v.verified);
       return textResult({
         action,
         applied: verification,

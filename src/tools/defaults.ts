@@ -5,7 +5,7 @@ import type { PickUpPatrolClient } from '../client.js';
 import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
 import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
-import { resolveTransportation } from './plans.js';
+import { proofsMatch, resolveTransportation } from './plans.js';
 import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 import { withHints } from './_errors.js';
 
@@ -154,13 +154,21 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
 
       await client.updateStudent(payload);
 
-      // Re-read and check the weekdays we changed actually hold the new
-      // option. DefaultsModifiedDate is not compared — it advances by itself.
+      // Re-read and check the weekdays we changed actually hold the new option
+      // AND the new note. The note alone is a normal edit here — every option at
+      // this school requires one — so comparing the id by itself would report
+      // success without observing the change. DefaultsModifiedDate stays out of
+      // the comparison entirely: it advances by itself, which would make every
+      // write look successful.
       const after = await client.getStudent(student_id);
-      const changed = new Set(dayIds);
-      const unchanged = [...changed].filter((dayId) => {
+      const sentNote = payload.DefaultPlans?.find((p) => p.DayId === dayIds[0])?.Note ?? null;
+      const unchanged = [...new Set(dayIds)].filter((dayId) => {
         const plan = (after.DefaultPlans ?? []).find((p) => p.DayId === dayId);
-        return plan?.TransportationId !== transportation.TransportationId;
+        if (plan === undefined) return true;
+        return !proofsMatch(
+          { transportationId: plan.TransportationId ?? null, note: plan.Note ?? null },
+          { transportationId: transportation.TransportationId, note: sentNote },
+        );
       });
 
       return textResult({

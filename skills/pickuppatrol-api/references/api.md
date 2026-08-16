@@ -6,8 +6,9 @@ token value is recorded.
 
 - Base: `https://app.pickuppatrol.net/api/json/reply/<DtoName>`
 - GET args on the query string; POST/PUT/PATCH args in a JSON body
-- Auth: session cookies from `Authenticate`, plus `Authorization: Bearer <jwt>`
-  when the deployment issues one
+- Auth: session cookies from `Authenticate` (`ss-id`, `ss-pid`, `ss-opt`). This
+  deployment returns `BearerToken: null`; send `Authorization: Bearer …` too if
+  one ever appears
 - Errors: ServiceStack `{"ResponseStatus":{"ErrorCode","Message","Errors":[…]}}`;
   an unauthenticated call to any authorised DTO is a bare `401`
 
@@ -21,7 +22,8 @@ curl -sS -c jar -X POST "$PUP/Authenticate" -H 'Content-Type: application/json' 
 ```
 
 Response: `{UserId, SessionId, UserName, DisplayName, BearerToken, RefreshToken,
-Roles, Permissions, ResponseStatus}`.
+Roles, Permissions, ResponseStatus}` — `BearerToken` and `RefreshToken` come
+back null here; the session is the cookies.
 
 Two-factor accounts (`User.OtpTypeId` set) need `POST /CreateOtp {OtpTypeId}`
 then `PUT /VerifyOtp {Otp, RememberMe}`. Token refresh is
@@ -84,6 +86,11 @@ PlanDate StudentId FirstName LastName SchoolId TransportationId Note IsLocked
 TransportationName SchoolName BusRouteUrl ValidationErrors EarlyDismissalTime
 CarNumber LimitedIds IsNotePrivate
 ```
+
+Returns the date's **override**, not the effective plan: a date with no specific
+plan reads back `TransportationId: null` even when the student has a weekly
+default for that weekday. Merge with `GetStudent(...).DefaultPlans` yourself to
+know what actually happens on a date.
 
 ## Write DTOs
 
@@ -159,10 +166,16 @@ dropped field is a field cleared.
 
 ## Verifying a write
 
-Re-read and compare the field that proves the change:
+Re-read and compare the fields that prove the change — the transportation id
+**and the note**. Every option seen so far is `IsNoteRequired`, so a note-only
+edit is an ordinary change and an id-only comparison would pass without ever
+observing it.
 
-- one-off plan → `GetPlanEdit(PlanDate, StudentId).TransportationId`
-- weekly defaults → `GetStudent(StudentId).DefaultPlans[].TransportationId`
+- one-off plan → `GetPlanEdit(PlanDate, StudentId)` → `.TransportationId`, `.Note`
+- weekly defaults → `GetStudent(StudentId).DefaultPlans[]` → `.TransportationId`, `.Note`
+
+After *clearing* a date, expect `TransportationId: null` — not the weekday
+default, which `GetPlanEdit` does not merge in.
 
 Exclude `ModifiedDate` and `DefaultsModifiedDate`: they advance on their own, so
 including them makes every write look successful.

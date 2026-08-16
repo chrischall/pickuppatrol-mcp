@@ -16,7 +16,8 @@ no captcha. The server signs in with your own email and password and holds the
 resulting session in memory.
 
 Every request shape is captured in [`docs/PICKUPPATROL-API.md`](docs/PICKUPPATROL-API.md),
-read off the shipped client rather than guessed.
+read off the shipped client rather than guessed, and exercised against a real
+account — reads, a write, and its restore.
 
 ## Install
 
@@ -78,10 +79,12 @@ a validation message rather than an opaque 400.
 
 **Writes are verified by re-reading.** A 2xx from PickUp Patrol is not proof: a
 change made after the school's cutoff is accepted and silently ignored. Every
-write re-reads the affected dates and compares the transportation id — never
-`ModifiedDate`, which advances on its own and would make every write look
-successful. The result says `verified: true/false`, and names the dates that did
-not move.
+write re-reads the affected dates and compares the transportation id **and the
+note** — never `ModifiedDate`, which advances on its own and would make every
+write look successful. The note is part of the proof because every dismissal
+option seen so far requires one, which makes a note-only edit ordinary: an
+id-only comparison would report success from a field that never had to move.
+The result says `verified: true/false`, and names the dates that did not move.
 
 ## Without the MCP server
 
@@ -99,6 +102,18 @@ npm run test:coverage # coverage-enforced at 100%
 
 Tests never touch the network: the transport is injected, and the MCP tools run
 through a real in-memory client/server pair.
+
+## Two things about the API worth knowing
+
+**`GetPlanEdit` returns a date's override, not the effective plan.** A date with
+no specific plan reads back `TransportationId: null` even when the student has a
+weekly default for that weekday. `pup_get_plan` passes that through as-is;
+`pup_list_students` is where the weekly defaults live.
+
+**Sign-in is a session cookie, not a JWT.** `Authenticate` returns
+`BearerToken: null` on this deployment and sets `ss-id`/`ss-pid`/`ss-opt`. The
+client keeps whichever the server returns and sends both, so a future switch to
+JWTs needs no change here.
 
 ## Safety notes
 
