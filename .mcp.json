@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pickuppatrol": {
+      "command": "npx",
+      "args": ["-y", "@chrischall/pickuppatrol-mcp"]
+    }
+  }
+}
