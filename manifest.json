@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "pickuppatrol-mcp",
   "display_name": "PickUp Patrol",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Read and change your children's school dismissal plans in PickUp Patrol — defaults, day-by-day changes and school cutoff times",
   "author": {
     "name": "Chris Chall",
@@ -54,19 +54,58 @@
     }
   },
   "tools": [
-    { "name": "pup_get_session", "description": "The signed-in parent account and the students linked to it" },
-    { "name": "pup_list_students", "description": "Every student on the account with their weekly default plans" },
-    { "name": "pup_get_student", "description": "One student, including their default plan for each weekday" },
-    { "name": "pup_get_default_plans", "description": "A student's weekly default dismissal plan, day by day" },
-    { "name": "pup_list_plans", "description": "Day-by-day dismissal plans over a date range" },
-    { "name": "pup_get_plan", "description": "The dismissal plan for one student on one date" },
-    { "name": "pup_list_transportations", "description": "The dismissal options a school offers, with their rules" },
-    { "name": "pup_get_school", "description": "School profile, notify times and per-day plan cutoff times" },
-    { "name": "pup_list_non_school_days", "description": "Dates a plan cannot be set for, and dates that already differ from the default" },
-    { "name": "pup_set_plan", "description": "Change or clear the dismissal plan for one or more dates" },
-    { "name": "pup_set_default_plans", "description": "Change a student's weekly default dismissal plan" },
-    { "name": "pup_mark_defaults_reviewed", "description": "Mark a student's default plans as reviewed" },
-    { "name": "pup_healthcheck", "description": "Verify credentials and that the PickUp Patrol API is reachable" }
+    {
+      "name": "pup_get_session",
+      "description": "The signed-in parent account and the students linked to it"
+    },
+    {
+      "name": "pup_list_students",
+      "description": "Every student on the account with their weekly default plans"
+    },
+    {
+      "name": "pup_get_student",
+      "description": "One student, including their default plan for each weekday"
+    },
+    {
+      "name": "pup_get_default_plans",
+      "description": "A student's weekly default dismissal plan, day by day"
+    },
+    {
+      "name": "pup_list_plans",
+      "description": "Day-by-day dismissal plans over a date range"
+    },
+    {
+      "name": "pup_get_plan",
+      "description": "The dismissal plan for one student on one date"
+    },
+    {
+      "name": "pup_list_transportations",
+      "description": "The dismissal options a school offers, with their rules"
+    },
+    {
+      "name": "pup_get_school",
+      "description": "School profile, notify times and per-day plan cutoff times"
+    },
+    {
+      "name": "pup_list_non_school_days",
+      "description": "Dates a plan cannot be set for, and dates that already differ from the default"
+    },
+    {
+      "name": "pup_set_plan",
+      "description": "Change or clear the dismissal plan for one or more dates"
+    },
+    {
+      "name": "pup_set_default_plans",
+      "description": "Change a student's weekly default dismissal plan"
+    },
+    {
+      "name": "pup_mark_defaults_reviewed",
+      "description": "Mark a student's default plans as reviewed"
+    },
+    {
+      "name": "pup_healthcheck",
+      "description": "Verify credentials and that the PickUp Patrol API is reachable"
+    }
   ],
   "compatibility": {
     "platforms": [

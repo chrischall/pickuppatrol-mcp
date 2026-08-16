@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "PickUp Patrol school-dismissal tools for Claude Code",
-    "version": "0.0.0"
+    "version": "0.1.0"
   },
   "plugins": [
     {
@@ -14,7 +14,7 @@
       "displayName": "PickUp Patrol",
       "source": "./",
       "description": "Read and change your children's school dismissal plans in PickUp Patrol — defaults, day-by-day changes and school cutoff times — via MCP",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "author": {
         "name": "Chris Chall"
       },
