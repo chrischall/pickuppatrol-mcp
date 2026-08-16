@@ -6,8 +6,8 @@ served at `/parents/`. There is no published API and no metadata endpoint
 service is a plain typed JSON API that is **reachable server-side** — no bot
 wall, no captcha, no app-key header.
 
-Everything below was captured on **2026-08-16** from two sources, both of which
-are the real client rather than a guess:
+Everything below was captured on **2026-08-16** from three sources, all of which
+are the real thing rather than a guess:
 
 1. **The shipped SPA bundles** (`/parents/assets/index-*.js` and its lazily
    loaded route chunks) — every request DTO is a class carrying its own
@@ -16,6 +16,8 @@ are the real client rather than a guess:
    the call sites that build them.
 2. **Live in-tab `fetch` calls** against a signed-in session, returning key sets
    only. No credential, cookie or token value was captured or committed.
+3. **Live server-side calls through this repo's own built client**, including a
+   write and its restore on a real account — see *Live verification* at the end.
 
 ## Transport
 
@@ -26,7 +28,7 @@ are the real client rather than a guess:
 | Request URL | `POST\|GET\|PUT\|PATCH {base}/api/json/reply/{RequestDtoName}` |
 | GET args | query string (`?StudentId=123&PlanDate=2026-08-17`) |
 | Body args | JSON body, `Content-Type: application/json` |
-| Auth | `Authorization: Bearer <jwt>` (the SPA also accepts the ServiceStack `ss-id` session cookie) |
+| Auth | ServiceStack session cookies (`ss-id`, `ss-pid`, `ss-opt`) — see below |
 
 The SPA constructs its client as:
 
@@ -71,6 +73,13 @@ Full field list on the DTO: `provider`, `State`, `oauth_token`,
 Response: `{ UserId, SessionId, UserName, DisplayName, ReferrerUrl,
 BearerToken, RefreshToken, ProfileUrl, Roles, Permissions, ResponseStatus, Meta }`.
 
+**This deployment authenticates by cookie, not by JWT.** A live sign-in returns
+`BearerToken: null` and `RefreshToken: null`, and sets `ss-id` / `ss-pid` /
+`ss-opt` (plus Azure's `ARRAffinity` pair). The SPA agrees: its client reads a
+`bearerToken` out of `localStorage`, but nothing ever writes one, and it fetches
+with `credentials: 'include'`. Keep whichever the server returns and send both —
+the JWT plumbing exists server-side and may be switched on.
+
 **Probe result (2026-08-16)** — a deliberately nonexistent `@example.com`
 address returned `400` with `ErrorCode: LOGIN-ERROR-EMAIL-NOT-FOUND`, i.e. the
 API accepted our client identity outright and only rejected the account. No
@@ -101,7 +110,7 @@ account out through the support desk, not through a timer.
 | `GetStudent` | GET | `StudentId`, `MergeTimeWithNote?` | `Student` |
 | `GetDefaultPlansReviewNeeded` | GET | — | `[{ StudentId, NeedsReview }]` |
 | `GetParentPlans` | GET | `StartDate`, `EndDate` | day-plan records for the range |
-| `GetPlanEdit` | GET | `PlanDate`, `StudentId` | `{ PlanDate, StudentId, FirstName, LastName, SchoolId, TransportationId, Note, IsLocked, TransportationName, SchoolName, BusRouteUrl, ValidationErrors, EarlyDismissalTime, CarNumber, LimitedIds, IsNotePrivate }` |
+| `GetPlanEdit` | GET | `PlanDate`, `StudentId` | `{ PlanDate, StudentId, FirstName, LastName, SchoolId, TransportationId, Note, IsLocked, TransportationName, SchoolName, BusRouteUrl, ValidationErrors, EarlyDismissalTime, CarNumber, LimitedIds, IsNotePrivate }` — the date's **override**, not the effective plan (see below) |
 | `GetBoldedDates` | GET | `StartDate`, `EndDate` | `string[]` — dates with a non-default plan |
 | `GetInvalidPlanDates` | GET | `SchoolId` | `string[]` — non-school days (105 entries on the captured account) |
 | `GetTransportations` | GET | `SchoolId` | dismissal options (see below) |
@@ -154,6 +163,17 @@ Client-side rules read off `plans-day-view`:
   **clears** it before sending.
 - `IsLimited` → only offered when the transportation id appears in the
   student's `LimitedIds`.
+
+### `GetPlanEdit` returns the override, not the effective plan
+
+A date with no specific plan reads back `TransportationId: null` **even when the
+student has a weekly default for that weekday** — verified live on a Friday for
+a student whose Friday default is set. So:
+
+- to know what actually happens on a date, read `GetPlanEdit` and fall back to
+  `GetStudent(...).DefaultPlans[DayId]` yourself;
+- after clearing a date, expect `null` — expecting the weekday default would
+  report every successful revert as a failure.
 
 ## Writes
 
@@ -239,6 +259,11 @@ DefaultsReviewedBy, DefaultPlans, SafetyFlag, DefaultCarNumber, LimitedIds`.
 
 ## Permission gates
 
+Every dismissal option observed so far sets `IsNoteRequired`, so in practice a
+plan always carries a `Note` — and a **note-only edit is an ordinary change**.
+Anything verifying a write must compare the note as well as the transportation
+id, or it reports success from a comparison that could never have moved.
+
 Writing plans is refused client-side (and rejected server-side) unless:
 
 - `GetSchoolSettings(...).General.AllowDefaultPlans` — for default plans, and
@@ -254,3 +279,23 @@ re-read and diff. Use `GetPlanEdit(PlanDate, StudentId)` for a one-off plan and
 `GetStudent(StudentId).DefaultPlans` for defaults. Exclude `ModifiedDate` (and
 `DefaultsModifiedDate`) from the comparison: they advance on their own and
 would make every write look successful.
+
+## Live verification
+
+Exercised against a real parent account on **2026-08-16**, through this repo's
+built client and its actual MCP tools:
+
+- **Sign-in** — server-side `Authenticate` with an email and password succeeds
+  and returns cookies only, no JWT.
+- **Every read DTO listed above** — `GetSession`, `GetChildren`, `GetStudent`,
+  `GetTransportations`, `GetPlanEdit`, `GetInvalidPlanDates`,
+  `GetSchoolSettings`, `GetSchoolNotifyTimes`,
+  `GetDefaultPlansReviewNeeded`.
+- **`UpdatePlans`** — a date set to an option and note, confirmed by re-read,
+  then cleared, confirmed by re-read (`GetBoldedDates` back to `[]`).
+- **`Student`** (weekly defaults) — one weekday's note changed, confirmed by
+  re-read, then restored, confirmed by re-read.
+
+Both writes were chosen so a failed restore would be harmless: the one-off date
+was set to the option its weekday default already used, and the default edit
+*narrowed* a note rather than widening it.

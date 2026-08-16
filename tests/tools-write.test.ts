@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
 import { registerPlanTools } from '../src/tools/plans.js';
 import { registerDefaultPlanTools } from '../src/tools/defaults.js';
-import { expectedTransportationId } from '../src/tools/plans.js';
+import { expectedPlanState, proofsMatch } from '../src/tools/plans.js';
 import { parseWeekdays } from '../src/tools/defaults.js';
 import { BUS, EARLY, makeClient, makeStudent, PICKUP, SCHOOL_ID, STUDENT_ID } from './helpers.js';
 
@@ -101,6 +101,53 @@ describe('pup_set_plan write', () => {
     await h.close();
   });
 
+  // The trap the live account exposed: every dismissal option at this school
+  // requires a note, so changing only the note is an ordinary edit. Comparing
+  // the transportation id alone would report success while observing nothing.
+  it('catches a note-only change that did not land, though the option matches', async () => {
+    const client = makeClient({
+      getPlanEdit: vi.fn().mockResolvedValue({
+        TransportationId: BUS.TransportationId,
+        TransportationName: 'Bus',
+        Note: 'the old note',
+      }),
+    });
+    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_plan', {
+        student_id: STUDENT_ID,
+        dates: [MONDAY],
+        transportation_id: BUS.TransportationId,
+        note: 'the new note',
+        confirm: true,
+      }),
+    );
+    expect(result['verified']).toBe(false);
+    expect(result['unchanged']).toEqual([MONDAY]);
+    await h.close();
+  });
+
+  it('passes when both the option and the note landed', async () => {
+    const client = makeClient({
+      getPlanEdit: vi.fn().mockResolvedValue({
+        TransportationId: BUS.TransportationId,
+        Note: 'the new note',
+      }),
+    });
+    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_plan', {
+        student_id: STUDENT_ID,
+        dates: [MONDAY],
+        transportation_id: BUS.TransportationId,
+        note: 'the new note',
+        confirm: true,
+      }),
+    );
+    expect(result['verified']).toBe(true);
+    await h.close();
+  });
+
   // The false-green trap: a write that the school silently ignored (past the
   // cutoff) still returns 2xx. Only the re-read catches it.
   it('reports the dates that did not actually change', async () => {
@@ -128,10 +175,12 @@ describe('pup_set_plan write', () => {
 
   it('clears dates back to the default and verifies against that default', async () => {
     const client = makeClient({
-      // After a revert, the date shows the student's Monday default (PickUp).
+      // A cleared date reads back as an empty override slot — GetPlanEdit does
+      // not merge the weekday default into it.
       getPlanEdit: vi.fn().mockResolvedValue({
-        TransportationId: PICKUP.TransportationId,
-        TransportationName: 'PickUp',
+        TransportationId: null,
+        TransportationName: null,
+        Note: null,
       }),
     });
     const h = await createTestHarness((s) => registerPlanTools(s, client));
@@ -147,29 +196,6 @@ describe('pup_set_plan write', () => {
       expect.objectContaining({ TransportationId: null, TransportationName: 'Default plan' }),
     ]);
     expect(result['verified']).toBe(true);
-    await h.close();
-  });
-
-  // Reverting a weekday the student has no default for leaves nothing to
-  // assert against. Reporting null says so, rather than claiming a pass off a
-  // comparison that was never made.
-  it('reports verification as unknown when there is no default to fall back to', async () => {
-    const client = makeClient();
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
-    const result = parseToolResult<Record<string, unknown>>(
-      await h.callTool('pup_set_plan', {
-        student_id: STUDENT_ID,
-        // A Tuesday; the fixture student only has a Monday default.
-        dates: ['2026-08-18'],
-        transportation_id: null,
-        confirm: true,
-      }),
-    );
-    const applied = (result['applied'] as Array<Record<string, unknown>>)[0];
-    expect(applied?.['verified']).toBeNull();
-    // An unknown is not a failure, so it must not be reported as one.
-    expect(result['verified']).toBe(true);
-    expect(result).not.toHaveProperty('unchanged');
     await h.close();
   });
 
@@ -194,34 +220,36 @@ describe('pup_set_plan write', () => {
   });
 });
 
-describe('expectedTransportationId', () => {
-  const student = makeStudent();
-
-  it('expects the id that was asked for on a normal change', () => {
-    expect(expectedTransportationId(student, MONDAY, 41245)).toBe(41245);
+describe('expectedPlanState', () => {
+  it('expects what was asked for on a normal change', () => {
+    expect(expectedPlanState({ transportationId: 41245, note: 'hi' })).toEqual({
+      transportationId: 41245,
+      note: 'hi',
+    });
   });
 
-  it("expects the student's weekday default after a revert", () => {
-    expect(expectedTransportationId(student, MONDAY, null)).toBe(PICKUP.TransportationId);
+  // GetPlanEdit reports the date's OVERRIDE, not the effective plan — verified
+  // live on a Friday where the student had a Friday default and the date still
+  // read back null. Expecting the default would fail every good revert.
+  it('expects an empty slot after a revert, not the weekday default', () => {
+    expect(expectedPlanState({ transportationId: null, note: 'ignored' })).toEqual({
+      transportationId: null,
+      note: null,
+    });
+  });
+});
+
+describe('proofsMatch', () => {
+  it('ignores whitespace the service may normalise off a note', () => {
+    expect(proofsMatch({ transportationId: 1, note: ' a ' }, { transportationId: 1, note: 'a' })).toBe(true);
   });
 
-  // Nothing to assert is reported as nothing, never as a pass — a proof field
-  // that does not exist would otherwise compare equal to itself.
-  it('asserts nothing when the student has no default for that weekday', () => {
-    expect(expectedTransportationId(student, '2026-08-18', null)).toBeUndefined();
+  it('treats a null note and an empty note as the same', () => {
+    expect(proofsMatch({ transportationId: 1, note: null }, { transportationId: 1, note: '' })).toBe(true);
   });
 
-  it('asserts nothing for an unparseable date', () => {
-    expect(expectedTransportationId(student, 'not-a-date', null)).toBeUndefined();
-  });
-
-  it('treats a default with a null option as a null expectation', () => {
-    const cleared = makeStudent({ DefaultPlans: [{ DayId: 2, TransportationId: null }] });
-    expect(expectedTransportationId(cleared, MONDAY, null)).toBeNull();
-  });
-
-  it('handles a student with no defaults at all', () => {
-    expect(expectedTransportationId(makeStudent({ DefaultPlans: null }), MONDAY, null)).toBeUndefined();
+  it('sees a different note as a mismatch', () => {
+    expect(proofsMatch({ transportationId: 1, note: 'a' }, { transportationId: 1, note: 'b' })).toBe(false);
   });
 });
 
@@ -272,6 +300,82 @@ describe('pup_set_default_plans', () => {
     expect(sent['SchoolName']).toBe('Whitewater Center');
     expect(sent['DefaultPlans']).toHaveLength(2);
     expect(result['verified']).toBe(true);
+    await h.close();
+  });
+
+  it('catches a default whose note did not change, though the option matches', async () => {
+    const client = makeClient({
+      getStudent: vi
+        .fn()
+        .mockResolvedValueOnce(makeStudent())
+        .mockResolvedValueOnce(
+          makeStudent({
+            DefaultPlans: [
+              { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the old note' },
+            ],
+          }),
+        ),
+    });
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_default_plans', {
+        student_id: STUDENT_ID,
+        days: ['Monday'],
+        transportation_id: PICKUP.TransportationId,
+        note: 'the new note',
+        confirm: true,
+      }),
+    );
+    expect(result['verified']).toBe(false);
+    expect(result['unchanged']).toEqual(['Monday']);
+    await h.close();
+  });
+
+  it('passes a default change when the option and the note both landed', async () => {
+    const client = makeClient({
+      getStudent: vi
+        .fn()
+        .mockResolvedValueOnce(makeStudent())
+        .mockResolvedValueOnce(
+          makeStudent({
+            DefaultPlans: [
+              { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the new note' },
+            ],
+          }),
+        ),
+    });
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_default_plans', {
+        student_id: STUDENT_ID,
+        days: ['Monday'],
+        transportation_id: PICKUP.TransportationId,
+        note: 'the new note',
+        confirm: true,
+      }),
+    );
+    expect(result['verified']).toBe(true);
+    await h.close();
+  });
+
+  it('treats a weekday that came back with no option at all as unchanged', async () => {
+    const client = makeClient({
+      getStudent: vi
+        .fn()
+        .mockResolvedValueOnce(makeStudent())
+        .mockResolvedValueOnce(makeStudent({ DefaultPlans: [{ DayId: 2 }] })),
+    });
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_default_plans', {
+        student_id: STUDENT_ID,
+        days: ['Monday'],
+        transportation_id: PICKUP.TransportationId,
+        note: 'a note',
+        confirm: true,
+      }),
+    );
+    expect(result['verified']).toBe(false);
     await h.close();
   });
 

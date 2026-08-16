@@ -28,6 +28,8 @@ pup_login() {
     -o /tmp/pup_auth.json -w '%{http_code}' >/tmp/pup_code
   [ "$(cat /tmp/pup_code)" = 200 ] || { jq -r '.ResponseStatus.Message' /tmp/pup_auth.json >&2; return 1; }
   export PUP_JAR="$jar"
+  # This deployment returns cookies only — BearerToken comes back null. The
+  # JWT path exists server-side, so keep a token if one ever appears.
   PUP_TOKEN=$(jq -r '.BearerToken // empty' /tmp/pup_auth.json); export PUP_TOKEN
 }
 
@@ -60,6 +62,8 @@ pup GET GetChildren | jq '.[] | select(.StudentId==1050046) | .DefaultPlans
 pup GET "GetTransportations?SchoolId=1703" | jq -r '.[] | select(.IsActive)
   | "\(.TransportationId)\t\(.Name)\tnote=\(.IsNoteRequired)\tcar=\(.UseCarNumbers)\tearly=\(.IsEarlyDismissal)"'
 
+# GetPlanEdit returns the date's OVERRIDE, not the effective plan: a date with
+# no specific plan reads back null even when a weekday default exists.
 pup GET "GetPlanEdit?PlanDate=2026-08-17&StudentId=1050046" | jq '{TransportationName,Note,IsLocked}'
 pup GET "GetInvalidPlanDates?SchoolId=1703" | jq 'length'   # non-school days
 ```
@@ -103,5 +107,8 @@ A 2xx is not proof. The school silently ignores a change past its cutoff time.
 pup GET "GetPlanEdit?PlanDate=2026-08-17&StudentId=1050046" | jq '.TransportationId'
 ```
 
-Compare `TransportationId` — **not** `ModifiedDate`, which advances on its own
-and would make every write look successful.
+Compare `TransportationId` **and `Note`** — never `ModifiedDate`, which advances
+on its own and would make every write look successful. The note matters: every
+option seen so far is `IsNoteRequired`, so a note-only edit is ordinary, and an
+id-only comparison would pass without observing it. After *clearing* a date,
+expect `null` — not the weekday default.
