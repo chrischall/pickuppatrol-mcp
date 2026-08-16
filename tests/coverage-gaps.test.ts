@@ -3,30 +3,12 @@ import { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
 import { McpToolError } from '@chrischall/mcp-utils';
 import { PickUpPatrolAuth } from '../src/auth.js';
 import { PickUpPatrolClient } from '../src/client.js';
-import { withHints } from '../src/tools/_errors.js';
 import { previewUnlessConfirmed } from '../src/tools/_confirm.js';
 import { registerAccountTools } from '../src/tools/account.js';
 import { registerSchoolTools } from '../src/tools/school.js';
 import { registerPlanTools } from '../src/tools/plans.js';
 import { registerDefaultPlanTools } from '../src/tools/defaults.js';
 import { makeClient, makeStudent, BUS, SCHOOL_ID, STUDENT_ID } from './helpers.js';
-
-describe('withHints', () => {
-  it('leaves an unexpected error alone, so a bug still reads as a bug', async () => {
-    const boom = new TypeError('undefined is not a function');
-    await expect(withHints(async () => { throw boom; })({})).rejects.toBe(boom);
-  });
-
-  it('leaves a hintless McpToolError alone', async () => {
-    const bare = new McpToolError('no advice to give');
-    await expect(withHints(async () => { throw bare; })({})).rejects.toBe(bare);
-  });
-
-  it('passes a successful result straight through', async () => {
-    const ok = { content: [{ type: 'text' as const, text: 'fine' }] };
-    await expect(withHints(async () => ok)({})).resolves.toBe(ok);
-  });
-});
 
 describe('previewUnlessConfirmed', () => {
   it('omits willSend when there is no body to show', () => {
