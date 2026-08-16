@@ -150,14 +150,15 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       // compare the one field that proves it. ModifiedDate is deliberately not
       // compared: it advances on its own, which would make every write look
       // successful.
-      const requestedState: PlanProof = {
+      // One expectation for the whole call: every date in a single UpdatePlans
+      // gets the same option and note, so this does not vary per date.
+      const expected = expectedPlanState({
         transportationId: transportation_id,
         note: plans[0]?.Note ?? null,
-      };
+      });
       const verification = await Promise.all(
         dates.map(async (date) => {
           const after = await client.getPlanEdit(date, student_id);
-          const expected = expectedPlanState(requestedState);
           const actual: PlanProof = {
             transportationId: after.TransportationId ?? null,
             note: after.Note ?? null,
