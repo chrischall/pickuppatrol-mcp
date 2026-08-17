@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
-import { McpToolError } from '@chrischall/mcp-utils';
 import { PickUpPatrolAuth } from '../src/auth.js';
 import { PickUpPatrolClient } from '../src/client.js';
 import { previewUnlessConfirmed } from '../src/tools/_confirm.js';
