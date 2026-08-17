@@ -6,7 +6,6 @@ import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
 import type { PlanUpdate, Transportation } from '../types.js';
 import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
-import { withHints } from './_errors.js';
 
 /** The fields whose change proves a plan write actually landed. */
 export interface PlanProof {
@@ -115,7 +114,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
         confirm: schemaConfirm,
       },
     },
-    withHints(async ({ student_id, dates, transportation_id, note, early_dismissal_time, car_number, confirm }) => {
+    (async ({ student_id, dates, transportation_id, note, early_dismissal_time, car_number, confirm }) => {
       // The reads below resolve and validate the payload; they mutate nothing.
       // Running them before the confirm gate is deliberate: it makes the
       // dry-run show the exact bytes that would be sent, already checked

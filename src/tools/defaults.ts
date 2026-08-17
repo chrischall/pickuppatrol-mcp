@@ -7,7 +7,6 @@ import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
 import { proofsMatch, resolveTransportation } from './plans.js';
 import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
-import { withHints } from './_errors.js';
 
 /**
  * Accept weekdays as names ("Monday") or ids (1 = Sunday … 7 = Saturday).
@@ -92,7 +91,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         confirm: schemaConfirm,
       },
     },
-    withHints(async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirm }) => {
+    (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirm }) => {
       // Read-modify-write: PickUp Patrol has no default-plans endpoint, so the
       // whole student record round-trips. Reading it here (before the confirm
       // gate) is what makes the dry-run show the real payload; it mutates
