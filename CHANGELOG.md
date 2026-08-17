@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.1.1...v0.1.2) (2026-08-17)
+
+
+### Refactor
+
+* drop the local hint wrapper for mcp-utils 0.15's built-in ([#7](https://github.com/chrischall/pickuppatrol-mcp/issues/7)) ([5371ed3](https://github.com/chrischall/pickuppatrol-mcp/commit/5371ed33954007bcdd8ce1a3e710abdda2ec4cb8))
+
 ## [0.1.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.1.0...v0.1.1) (2026-08-16)
 
 

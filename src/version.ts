@@ -7,4 +7,4 @@
  * annotation, so there is exactly one line to keep in sync and
  * `versionSyncTest` has exactly one line to check.
  */
-export const VERSION = '0.1.1'; // x-release-please-version
+export const VERSION = '0.1.2'; // x-release-please-version

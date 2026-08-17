@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "pickuppatrol-mcp",
   "display_name": "PickUp Patrol",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read and change your children's school dismissal plans in PickUp Patrol — defaults, day-by-day changes and school cutoff times",
   "author": {
     "name": "Chris Chall",
