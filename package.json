@@ -1,6 +1,6 @@
 {
   "name": "@chrischall/pickuppatrol-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "mcpName": "io.github.chrischall/pickuppatrol-mcp",
   "description": "PickUp Patrol MCP server for Claude — developed and maintained by AI (Claude Code)",
