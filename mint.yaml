@@ -1,0 +1,22 @@
+version: 1
+name: PickUp Patrol
+slug: pickuppatrol
+summary: >-
+  Read and change your children's school dismissal plans in PickUp Patrol —
+  defaults, day-by-day changes and school cutoff times
+env:
+  - name: PICKUPPATROL_USERNAME
+    required: false
+    help: >-
+      The email address you sign in to app.pickuppatrol.net with.
+  - name: PICKUPPATROL_PASSWORD
+    secret: true
+    required: false
+    help: >-
+      Your PickUp Patrol password. Stored by the host, never logged by this
+      server.
+egress:
+  allow:
+    # Only hosts the SERVER process actually fetches. Hosts that appear
+    # solely in a URL this server BUILDS and returns are excluded.
+    - app.pickuppatrol.net
