@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { McpToolError, textResult } from '@chrischall/mcp-utils';
+import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
 import { dayIdToName, nameToDayId } from '../dates.js';
@@ -49,7 +49,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         client.getStudent(student_id),
         client.getDefaultPlansReviewNeeded(),
       ]);
-      return textResult({
+      return minifiedResult({
         studentId: student.StudentId,
         name: [student.FirstName, student.LastName].filter(Boolean).join(' '),
         schoolId: student.SchoolId,
@@ -111,7 +111,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         await client.updateStudent(payload);
         const after = await client.getStudent(student_id);
         const remaining = after.DefaultPlans ?? [];
-        return textResult({
+        return minifiedResult({
           action: 'Cleared every weekday default',
           defaultPlans: summarizeDefaultPlans(remaining),
           verified: remaining.length === 0,
@@ -170,7 +170,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         );
       });
 
-      return textResult({
+      return minifiedResult({
         action,
         defaultPlans: summarizeDefaultPlans(after.DefaultPlans),
         verified: unchanged.length === 0,
@@ -210,7 +210,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       await client.setDefaultsReviewed(student_id, value);
       const review = await client.getDefaultPlansReviewNeeded();
       const needsReview = review.find((r) => r.StudentId === student_id)?.NeedsReview ?? false;
-      return textResult({
+      return minifiedResult({
         studentId: student_id,
         needsDefaultsReview: needsReview,
         verified: needsReview === !value,
