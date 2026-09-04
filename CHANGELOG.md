@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.1.2...v0.2.0) (2026-09-04)
+
+
+### Features
+
+* **tools:** minify every response ([#30](https://github.com/chrischall/pickuppatrol-mcp/issues/30)) ([d7cef01](https://github.com/chrischall/pickuppatrol-mcp/commit/d7cef01b961e65ff3addd515a6a531dfd78b965d))
+
 ## [0.1.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.1.1...v0.1.2) (2026-08-17)
 
 
