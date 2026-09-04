@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textResult, messageOf } from '@chrischall/mcp-utils';
+import { messageOf, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { dayIdToName } from '../dates.js';
 import type { DefaultPlan, Student } from '../types.js';
@@ -46,7 +46,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     },
     async () => {
       const session = await client.getSession();
-      return textResult({
+      return minifiedResult({
         userId: session.UserId ?? null,
         name: session.DisplayName ?? [session.FirstName, session.LastName].filter(Boolean).join(' '),
         email: session.Email ?? session.PrimaryEmail ?? null,
@@ -71,7 +71,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
         client.getDefaultPlansReviewNeeded(),
       ]);
       const needsReview = new Map(review.map((r) => [r.StudentId, r.NeedsReview]));
-      return textResult(
+      return minifiedResult(
         students.map((student) => ({
           ...summarizeStudent(student),
           needsDefaultsReview: needsReview.get(student.StudentId) ?? false,
@@ -96,7 +96,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     },
     async ({ student_id, raw }) => {
       const student = await client.getStudent(student_id);
-      return textResult(raw === true ? student : summarizeStudent(student));
+      return minifiedResult(raw === true ? student : summarizeStudent(student));
     },
   );
 
@@ -110,7 +110,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     async () => {
       try {
         const session = await client.getSession();
-        return textResult({
+        return minifiedResult({
           ok: true,
           version: VERSION,
           signedInAs: session.Email ?? session.PrimaryEmail ?? session.DisplayName ?? null,
@@ -120,7 +120,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
         // A healthcheck reports rather than throws: the whole point is to say
         // what is wrong, and an exception here reads to the host as the tool
         // itself being broken.
-        return textResult({ ok: false, version: VERSION, error: messageOf(err) });
+        return minifiedResult({ ok: false, version: VERSION, error: messageOf(err) });
       }
     },
   );

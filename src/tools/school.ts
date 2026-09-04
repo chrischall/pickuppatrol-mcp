@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { textResult } from '@chrischall/mcp-utils';
+import { minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import type { Transportation } from '../types.js';
 
@@ -41,7 +41,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     async ({ school_id, include_inactive }) => {
       const options = await client.getTransportations(school_id);
       const visible = include_inactive === true ? options : options.filter((o) => o.IsActive !== false);
-      return textResult(visible.map(summarizeTransportation));
+      return minifiedResult(visible.map(summarizeTransportation));
     },
   );
 
@@ -61,7 +61,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
         client.getSchoolNotifyTimes(school_id),
         client.getSchoolSettings(school_id),
       ]);
-      return textResult({ school, notifyTimes, settings });
+      return minifiedResult({ school, notifyTimes, settings });
     },
   );
 
@@ -83,10 +83,10 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     async ({ school_id, start_date, end_date }) => {
       const invalidDates = await client.getInvalidPlanDates(school_id);
       if (start_date === undefined || end_date === undefined) {
-        return textResult({ invalidDates });
+        return minifiedResult({ invalidDates });
       }
       const changedDates = await client.getBoldedDates(start_date, end_date);
-      return textResult({ invalidDates, changedDates });
+      return minifiedResult({ invalidDates, changedDates });
     },
   );
 
@@ -100,6 +100,6 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
         school_id: z.number().int().describe('School id, from pup_list_students'),
       },
     },
-    async ({ school_id }) => textResult(await client.getCarNumbers(school_id)),
+    async ({ school_id }) => minifiedResult(await client.getCarNumbers(school_id)),
   );
 }

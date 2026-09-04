@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { McpToolError, textResult } from '@chrischall/mcp-utils';
+import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
@@ -67,7 +67,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       },
     },
     async ({ start_date, end_date }) =>
-      textResult(await client.getParentPlans(start_date, end_date)),
+      minifiedResult(await client.getParentPlans(start_date, end_date)),
   );
 
   server.registerTool(
@@ -81,7 +81,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
         date: z.string().describe('YYYY-MM-DD'),
       },
     },
-    async ({ student_id, date }) => textResult(await client.getPlanEdit(date, student_id)),
+    async ({ student_id, date }) => minifiedResult(await client.getPlanEdit(date, student_id)),
   );
 
   server.registerTool(
@@ -176,7 +176,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       );
 
       const failed = verification.filter((v) => !v.verified);
-      return textResult({
+      return minifiedResult({
         action,
         applied: verification,
         verified: failed.length === 0,
