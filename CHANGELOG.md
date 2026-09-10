@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.2.0...v0.2.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* **deps:** @chrischall/mcp-utils 0.26.1 ([#41](https://github.com/chrischall/pickuppatrol-mcp/issues/41)) ([5b47a99](https://github.com/chrischall/pickuppatrol-mcp/commit/5b47a99315aa89b78b73cb25d8c2d84a60d3b073))
+* **deps:** Bump hono from 4.13.2 to 4.13.7 ([#39](https://github.com/chrischall/pickuppatrol-mcp/issues/39)) ([c019d11](https://github.com/chrischall/pickuppatrol-mcp/commit/c019d1144587c5f46825c51cd3b41fef45e345cc))
+* **deps:** declare the peer floors mcp-utils 0.26.1 requires ([#42](https://github.com/chrischall/pickuppatrol-mcp/issues/42)) ([2e0f77b](https://github.com/chrischall/pickuppatrol-mcp/commit/2e0f77b7f6b04451b8bd349bb8e9ff2b69bfc061))
+
 ## [0.2.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.1.2...v0.2.0) (2026-09-04)
 
 
