@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
@@ -61,10 +61,10 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       description:
         'Day-by-day dismissal plans across a date range for every student on the account, as PickUp Patrol returns them.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         start_date: z.string().describe('YYYY-MM-DD'),
         end_date: z.string().describe('YYYY-MM-DD'),
-      },
+      }),
     },
     async ({ start_date, end_date }) =>
       minifiedResult(await client.getParentPlans(start_date, end_date)),
@@ -76,10 +76,10 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       description:
         'The dismissal plan for one student on one date — the option in force, any note, the early-dismissal time, and whether the date is locked because the cutoff has passed.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         date: z.string().describe('YYYY-MM-DD'),
-      },
+      }),
     },
     async ({ student_id, date }) => minifiedResult(await client.getPlanEdit(date, student_id)),
   );
@@ -89,7 +89,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
     {
       description:
         "Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school, so it requires confirm: true; without it you get a dry-run of the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.",
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         dates: z
           .array(z.string())
@@ -112,7 +112,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
           .optional()
           .describe('Car number, for options where usesCarNumbers is true'),
         confirm: schemaConfirm,
-      },
+      }),
     },
     (async ({ student_id, dates, transportation_id, note, early_dismissal_time, car_number, confirm }) => {
       // The reads below resolve and validate the payload; they mutate nothing.

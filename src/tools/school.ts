@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import type { Transportation } from '../types.js';
@@ -30,13 +30,13 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
       description:
         'The dismissal options a school offers (bus, car pickup, walker, absent …) with the rules each one imposes: whether a note is required, whether it takes a car number, whether it is an early dismissal, and the daily cutoff time. Read this before setting a plan.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
         include_inactive: z
           .boolean()
           .optional()
           .describe('Include options the school has deactivated (default false)'),
-      },
+      }),
     },
     async ({ school_id, include_inactive }) => {
       const options = await client.getTransportations(school_id);
@@ -51,9 +51,9 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
       description:
         'A school profile together with its per-weekday notify times and plan cutoff times, and the settings that decide whether parents may set plans at all.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
-      },
+      }),
     },
     async ({ school_id }) => {
       const [school, notifyTimes, settings] = await Promise.all([
@@ -71,14 +71,14 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
       description:
         'Dates a plan cannot be set for at a school (holidays, closures, weekends), and optionally the dates in a range that already differ from the student defaults.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
         start_date: z
           .string()
           .optional()
           .describe('YYYY-MM-DD; with end_date, also return dates that differ from the default'),
         end_date: z.string().optional().describe('YYYY-MM-DD'),
-      },
+      }),
     },
     async ({ school_id, start_date, end_date }) => {
       const invalidDates = await client.getInvalidPlanDates(school_id);
@@ -96,9 +96,9 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
       description:
         'The car numbers a school has issued to this account, for dismissal options where usesCarNumbers is true.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
-      },
+      }),
     },
     async ({ school_id }) => minifiedResult(await client.getCarNumbers(school_id)),
   );

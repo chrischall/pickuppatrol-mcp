@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { messageOf, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { dayIdToName } from '../dates.js';
@@ -86,13 +86,13 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
       description:
         'One student in full, including the default dismissal plan for each weekday. Pass raw: true for the untouched API record.',
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         raw: z
           .boolean()
           .optional()
           .describe('Return the unprojected API record instead of the summary'),
-      },
+      }),
     },
     async ({ student_id, raw }) => {
       const student = await client.getStudent(student_id);
