@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/server';
 import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
@@ -40,9 +40,9 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       description:
         "A student's weekly default dismissal plan — how they normally leave school on each day of the week — and whether the defaults still need a parent review.",
       annotations: { readOnlyHint: true },
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
-      },
+      }),
     },
     async ({ student_id }) => {
       const [student, review] = await Promise.all([
@@ -68,7 +68,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     {
       description:
         "Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan, so it requires confirm: true; without it you get a dry-run. Read pup_list_transportations first.",
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         days: z
           .array(z.union([z.string(), z.number().int()]))
@@ -89,7 +89,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           .optional()
           .describe('Remove every weekday default instead of setting one (days is ignored)'),
         confirm: schemaConfirm,
-      },
+      }),
     },
     (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirm }) => {
       // Read-modify-write: PickUp Patrol has no default-plans endpoint, so the
@@ -190,11 +190,11 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     {
       description:
         "Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. Requires confirm: true.",
-      inputSchema: {
+      inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         reviewed: z.boolean().optional().describe('Defaults to true'),
         confirm: schemaConfirm,
-      },
+      }),
     },
     async ({ student_id, reviewed, confirm }) => {
       const value = reviewed ?? true;
