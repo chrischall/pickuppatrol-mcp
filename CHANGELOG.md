@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.2.1...v1.0.0) (2026-09-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mcp:** migrate server to SDK v2 and take mcp-utils 1.0.0 ([#49](https://github.com/chrischall/pickuppatrol-mcp/issues/49))
+
+### Features
+
+* **mcp:** migrate server to SDK v2 and take mcp-utils 1.0.0 ([#49](https://github.com/chrischall/pickuppatrol-mcp/issues/49)) ([47a297c](https://github.com/chrischall/pickuppatrol-mcp/commit/47a297c2c0f727a2357868d61d5e27a0105ca649))
+
+
+### Bug Fixes
+
+* **release:** drop bump-minor-pre-major so a breaking change cuts a major ([#51](https://github.com/chrischall/pickuppatrol-mcp/issues/51)) ([ce25c72](https://github.com/chrischall/pickuppatrol-mcp/commit/ce25c72b60dde117bcc7ee76f1d9c5ea04bef541))
+
 ## [0.2.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.2.0...v0.2.1) (2026-09-10)
 
 
