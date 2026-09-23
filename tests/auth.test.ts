@@ -131,6 +131,63 @@ describe('PickUpPatrolAuth', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  // A sign-in that never answers must not hold every tool call hostage: ensure()
+  // hands the in-flight login to all concurrent callers, the healthcheck included.
+  it('bounds the sign-in with a timeout', async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
+    await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('gives up on a hung sign-in and leaves it retryable', async () => {
+    const hung = vi.fn().mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl: hung, timeoutMs: 20 });
+
+    try {
+      await auth.ensure();
+      expect.unreachable('a hung sign-in must time out');
+    } catch (err) {
+      expect((err as Error).message).toMatch(/did not answer the sign-in within/);
+      expect((err as McpToolError).hint).toMatch(/try again/i);
+    }
+
+    // Transient, not cached as permanent: the next call signs in afresh.
+    hung.mockImplementationOnce(async () => jsonResponse({ BearerToken: 'jwt-abc' }));
+    await expect(auth.ensure()).resolves.toMatchObject({ bearerToken: 'jwt-abc' });
+    expect(hung).toHaveBeenCalledTimes(2);
+  });
+
+  // Headers arrive, then the body stalls: the same timeout has to cover it.
+  it('gives up on a sign-in whose body never finishes', async () => {
+    const stalled = vi.fn().mockImplementation(
+      async (_url: string, init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: () =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+            }),
+        }) as unknown as Response,
+    );
+    await expect(
+      new PickUpPatrolAuth({ ...CREDS, fetchImpl: stalled, timeoutMs: 20 }).ensure(),
+    ).rejects.toThrow(/did not answer the sign-in within/);
+  });
+
+  it('passes a non-timeout network failure through unchanged', async () => {
+    const boom = new TypeError('fetch failed');
+    const fetchImpl = vi.fn().mockRejectedValue(boom);
+    await expect(new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure()).rejects.toBe(boom);
+  });
+
   it('surfaces a non-JSON login failure with its status', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('<html>nope</html>', { status: 500 }));
     await expect(new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure()).rejects.toThrow(

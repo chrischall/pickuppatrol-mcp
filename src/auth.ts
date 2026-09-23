@@ -4,6 +4,9 @@ import type { AuthenticateResponse, ResponseStatus } from './types.js';
 export const BASE_URL = 'https://app.pickuppatrol.net';
 export const BASE_PATH = '/api/json/reply';
 
+/** Upper bound on any one request to PickUp Patrol, sign-in included. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
 /** Minimal `fetch` seam so tests never open a socket. */
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -28,6 +31,8 @@ export interface AuthOptions {
   username?: string;
   password?: string;
   fetchImpl?: FetchLike;
+  /** Sign-in timeout; defaults to `REQUEST_TIMEOUT_MS`. A test seam. */
+  timeoutMs?: number;
 }
 
 /**
@@ -50,6 +55,7 @@ export class PickUpPatrolAuth {
   private readonly password: string | null;
   private readonly configError: Error | null;
   private readonly fetchImpl: FetchLike;
+  private readonly timeoutMs: number;
 
   private session: PupSession | null = null;
   private inFlight: Promise<PupSession> | null = null;
@@ -78,6 +84,7 @@ export class PickUpPatrolAuth {
     }
 
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
+    this.timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
   }
 
   /** True once a login has succeeded — used by the healthcheck tool. */
@@ -127,19 +134,42 @@ export class PickUpPatrolAuth {
   }
 
   private async login(): Promise<PupSession> {
-    const res = await this.fetchImpl(`${BASE_URL}${BASE_PATH}/Authenticate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        provider: 'credentials',
-        UserName: this.username,
-        Password: this.password,
-        RememberMe: true,
-      }),
-      redirect: 'manual',
-    });
-
-    const body = (await res.json().catch(() => null)) as AuthenticateResponse | null;
+    // Bounded like every other request. `ensure()` shares this promise with
+    // every concurrent and later caller until it settles, so an unanswered
+    // sign-in would otherwise stall every tool — the healthcheck included —
+    // for as long as undici's own ~300s default. The signal also covers the
+    // body read below.
+    const signal = AbortSignal.timeout(this.timeoutMs);
+    let res: Response;
+    let body: AuthenticateResponse | null;
+    try {
+      res = await this.fetchImpl(`${BASE_URL}${BASE_PATH}/Authenticate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          provider: 'credentials',
+          UserName: this.username,
+          Password: this.password,
+          RememberMe: true,
+        }),
+        redirect: 'manual',
+        signal,
+      });
+      body = (await res.json().catch((err: unknown) => {
+        if (signal.aborted) throw err;
+        return null;
+      })) as AuthenticateResponse | null;
+    } catch (err) {
+      // Transient: a timeout says nothing about the credentials, so it is
+      // never cached as permanentError and the next call signs in afresh.
+      if (signal.aborted) {
+        throw new McpToolError(
+          `PickUp Patrol did not answer the sign-in within ${this.timeoutMs / 1000}s`,
+          { hint: 'The service may be slow or down. Try again shortly.' },
+        );
+      }
+      throw err;
+    }
 
     if (!res.ok) {
       const detail = describeResponseStatus(body?.ResponseStatus);

@@ -1,7 +1,13 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { loadDotenvSafely, McpToolError, buildQueryString } from '@chrischall/mcp-utils';
-import { PickUpPatrolAuth, BASE_URL, BASE_PATH, describeResponseStatus } from './auth.js';
+import {
+  PickUpPatrolAuth,
+  BASE_URL,
+  BASE_PATH,
+  REQUEST_TIMEOUT_MS,
+  describeResponseStatus,
+} from './auth.js';
 import type { AuthOptions, FetchLike, PupSession } from './auth.js';
 import type {
   DefaultsReviewNeeded,
@@ -24,8 +30,6 @@ try {
 } catch {
   /* non-Node runtime: no .env to load */
 }
-
-const REQUEST_TIMEOUT_MS = 30_000;
 
 export interface ClientOptions extends AuthOptions {
   auth?: PickUpPatrolAuth;
