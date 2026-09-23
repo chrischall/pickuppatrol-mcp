@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.0.0...v1.0.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **deps:** require zod ^4.6.5 to match @chrischall/mcp-utils 2.4.0 ([#54](https://github.com/chrischall/pickuppatrol-mcp/issues/54)) ([12065b8](https://github.com/chrischall/pickuppatrol-mcp/commit/12065b85b6d4f19a803c33a9e5a681ce78f97785))
+* **deps:** upgrade @chrischall/mcp-utils to 2.4.0 and @fetchproxy/* to 3.2.0 ([#52](https://github.com/chrischall/pickuppatrol-mcp/issues/52)) ([5d36809](https://github.com/chrischall/pickuppatrol-mcp/commit/5d36809698661e3169a32b896913f827eb593ef0))
+
 ## [1.0.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v0.2.1...v1.0.0) (2026-09-20)
 
 
