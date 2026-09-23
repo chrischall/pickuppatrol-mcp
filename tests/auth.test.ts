@@ -131,6 +131,63 @@ describe('PickUpPatrolAuth', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  // A sign-in that never answers must not hold every tool call hostage: ensure()
+  // hands the in-flight login to all concurrent callers, the healthcheck included.
+  it('bounds the sign-in with a timeout', async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
+    await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('gives up on a hung sign-in and leaves it retryable', async () => {
+    const hung = vi.fn().mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl: hung, timeoutMs: 20 });
+
+    try {
+      await auth.ensure();
+      expect.unreachable('a hung sign-in must time out');
+    } catch (err) {
+      expect((err as Error).message).toMatch(/did not answer the sign-in within/);
+      expect((err as McpToolError).hint).toMatch(/try again/i);
+    }
+
+    // Transient, not cached as permanent: the next call signs in afresh.
+    hung.mockImplementationOnce(async () => jsonResponse({ BearerToken: 'jwt-abc' }));
+    await expect(auth.ensure()).resolves.toMatchObject({ bearerToken: 'jwt-abc' });
+    expect(hung).toHaveBeenCalledTimes(2);
+  });
+
+  // Headers arrive, then the body stalls: the same timeout has to cover it.
+  it('gives up on a sign-in whose body never finishes', async () => {
+    const stalled = vi.fn().mockImplementation(
+      async (_url: string, init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          json: () =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+            }),
+        }) as unknown as Response,
+    );
+    await expect(
+      new PickUpPatrolAuth({ ...CREDS, fetchImpl: stalled, timeoutMs: 20 }).ensure(),
+    ).rejects.toThrow(/did not answer the sign-in within/);
+  });
+
+  it('passes a non-timeout network failure through unchanged', async () => {
+    const boom = new TypeError('fetch failed');
+    const fetchImpl = vi.fn().mockRejectedValue(boom);
+    await expect(new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure()).rejects.toBe(boom);
+  });
+
   it('surfaces a non-JSON login failure with its status', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('<html>nope</html>', { status: 500 }));
     await expect(new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure()).rejects.toThrow(
@@ -175,16 +232,46 @@ describe('withAuth', () => {
   });
 
   // A server that answers 401 unconditionally must not become a login loop
-  // against the account — one replay, then the 401 is the answer.
-  it('replays exactly once, then surfaces the 401', async () => {
+  // against the account — one replay, then stop.
+  it('replays exactly once, then fails', async () => {
     const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
     const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
     const call = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
 
-    const res = await auth.withAuth(call);
-    expect(res.status).toBe(401);
+    await expect(auth.withAuth(call)).rejects.toThrow(/rejected the session it just issued/);
     expect(call).toHaveBeenCalledTimes(2);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  // The live deployment always sets Azure's ARRAffinity cookie, so a
+  // two-factor account's login never comes back empty-handed — the jar check
+  // in login() cannot see it. What it CAN see: a session minted moments ago
+  // is rejected outright. That is permanent, and caching it stops every later
+  // call spending two more sign-ins against an account whose lockout only
+  // the support desk can clear.
+  it('treats a freshly issued session that is rejected as permanent (two-factor)', async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse(
+        { BearerToken: null },
+        { setCookie: ['ARRAffinity=abc; Path=/', 'ARRAffinitySameSite=abc; Path=/; SameSite=None'] },
+      ),
+    );
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    const call = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
+
+    try {
+      await auth.withAuth(call);
+      expect.unreachable('a rejected fresh session must throw');
+    } catch (err) {
+      expect((err as Error).message).toMatch(/rejected the session it just issued/);
+      expect((err as McpToolError).hint).toMatch(/two-factor/);
+    }
+    await expect(auth.withAuth(call)).rejects.toThrow(/rejected the session it just issued/);
+    await expect(auth.ensure()).rejects.toThrow(/rejected the session it just issued/);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(auth.isAuthenticated).toBe(false);
   });
 
   it('drops the cached session on invalidate', async () => {

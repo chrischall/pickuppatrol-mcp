@@ -4,6 +4,9 @@ import type { AuthenticateResponse, ResponseStatus } from './types.js';
 export const BASE_URL = 'https://app.pickuppatrol.net';
 export const BASE_PATH = '/api/json/reply';
 
+/** Upper bound on any one request to PickUp Patrol, sign-in included. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
 /** Minimal `fetch` seam so tests never open a socket. */
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -28,6 +31,8 @@ export interface AuthOptions {
   username?: string;
   password?: string;
   fetchImpl?: FetchLike;
+  /** Sign-in timeout; defaults to `REQUEST_TIMEOUT_MS`. A test seam. */
+  timeoutMs?: number;
 }
 
 /**
@@ -50,6 +55,7 @@ export class PickUpPatrolAuth {
   private readonly password: string | null;
   private readonly configError: Error | null;
   private readonly fetchImpl: FetchLike;
+  private readonly timeoutMs: number;
 
   private session: PupSession | null = null;
   private inFlight: Promise<PupSession> | null = null;
@@ -78,6 +84,7 @@ export class PickUpPatrolAuth {
     }
 
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
+    this.timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
   }
 
   /** True once a login has succeeded — used by the healthcheck tool. */
@@ -117,29 +124,69 @@ export class PickUpPatrolAuth {
    * once and the call replayed exactly once — never more, so a server that
    * answers 401 unconditionally cannot turn into a login loop against the
    * account.
+   *
+   * If the session minted for the replay is rejected too, the sign-in is
+   * "succeeding" without producing a usable session — in practice a
+   * two-factor account. The login-time check cannot see that (Azure's
+   * ARRAffinity cookie means the jar is never empty), so this is where it is
+   * caught, and it is cached as permanent: otherwise every later call would
+   * spend two more sign-ins against the account.
    */
   async withAuth(call: (session: PupSession) => Promise<Response>): Promise<Response> {
     const first = await call(await this.ensure());
     if (first.status !== 401) return first;
 
     this.invalidate();
-    return call(await this.ensure());
+    const replay = await call(await this.ensure());
+    if (replay.status !== 401) return replay;
+
+    this.invalidate();
+    this.permanentError = new McpToolError(
+      'PickUp Patrol accepted the sign-in but rejected the session it just issued',
+      {
+        hint: 'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check, then restart the server.',
+      },
+    );
+    throw this.permanentError;
   }
 
   private async login(): Promise<PupSession> {
-    const res = await this.fetchImpl(`${BASE_URL}${BASE_PATH}/Authenticate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        provider: 'credentials',
-        UserName: this.username,
-        Password: this.password,
-        RememberMe: true,
-      }),
-      redirect: 'manual',
-    });
-
-    const body = (await res.json().catch(() => null)) as AuthenticateResponse | null;
+    // Bounded like every other request. `ensure()` shares this promise with
+    // every concurrent and later caller until it settles, so an unanswered
+    // sign-in would otherwise stall every tool — the healthcheck included —
+    // for as long as undici's own ~300s default. The signal also covers the
+    // body read below.
+    const signal = AbortSignal.timeout(this.timeoutMs);
+    let res: Response;
+    let body: AuthenticateResponse | null;
+    try {
+      res = await this.fetchImpl(`${BASE_URL}${BASE_PATH}/Authenticate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          provider: 'credentials',
+          UserName: this.username,
+          Password: this.password,
+          RememberMe: true,
+        }),
+        redirect: 'manual',
+        signal,
+      });
+      body = (await res.json().catch((err: unknown) => {
+        if (signal.aborted) throw err;
+        return null;
+      })) as AuthenticateResponse | null;
+    } catch (err) {
+      // Transient: a timeout says nothing about the credentials, so it is
+      // never cached as permanentError and the next call signs in afresh.
+      if (signal.aborted) {
+        throw new McpToolError(
+          `PickUp Patrol did not answer the sign-in within ${this.timeoutMs / 1000}s`,
+          { hint: 'The service may be slow or down. Try again shortly.' },
+        );
+      }
+      throw err;
+    }
 
     if (!res.ok) {
       const detail = describeResponseStatus(body?.ResponseStatus);
@@ -164,8 +211,9 @@ export class PickUpPatrolAuth {
     }
 
     // Two-factor accounts return a session that is not yet usable; the SPA
-    // routes them to /two-factor. Surface that plainly rather than letting
-    // every subsequent read fail with an opaque 401.
+    // routes them to /two-factor. A login with no token and no cookie at all
+    // is caught here; the live deployment always sets ARRAffinity, though, so
+    // the usual two-factor signal is the rejected fresh session in withAuth().
     const cookieHeader = collectCookieHeader(res);
     const bearerToken = body?.BearerToken ?? null;
     if (!bearerToken && !cookieHeader) {

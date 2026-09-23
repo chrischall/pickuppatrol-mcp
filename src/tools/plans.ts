@@ -7,15 +7,55 @@ import { weekdayOf } from '../dates.js';
 import type { PlanUpdate, Transportation } from '../types.js';
 import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
 
-/** The fields whose change proves a plan write actually landed. */
+/**
+ * The fields whose change proves a plan write actually landed.
+ *
+ * `earlyDismissalTime` and `carNumber` are part of the proof whenever the
+ * write sent them: moving an early dismissal from 14:30 to 13:00 keeps the
+ * option and note identical, so without the time a silently dropped write
+ * would read back as verified. Left `undefined` on the expected side, they
+ * are not compared — the write did not carry them.
+ */
 export interface PlanProof {
   transportationId: number | null;
   note: string | null;
+  earlyDismissalTime?: string | null | undefined;
+  carNumber?: string | null | undefined;
 }
 
-/** Compare two proofs, ignoring whitespace the service may normalise off a note. */
-export function proofsMatch(a: PlanProof, b: PlanProof): boolean {
-  return a.transportationId === b.transportationId && (a.note ?? '').trim() === (b.note ?? '').trim();
+/**
+ * Reduce a time of day to `HH:MM:SS` so a read-back can be compared with what
+ * was sent. Accepts `H:MM`, `HH:MM:SS`, an ISO date-time, and the XSD duration
+ * ServiceStack uses for a `TimeSpan` (`PT13H30M`). Anything unrecognised is
+ * returned trimmed, so it can only ever compare unequal — a false "unchanged"
+ * is recoverable, a false "verified" is not.
+ */
+export function normalizeTimeOfDay(time: string): string {
+  const trimmed = time.trim();
+  const pad = (n: string | undefined) => (n ?? '0').padStart(2, '0');
+  const duration = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)(?:\.\d+)?S)?$/.exec(trimmed);
+  if (duration && trimmed !== 'PT') return `${pad(duration[1])}:${pad(duration[2])}:${pad(duration[3])}`;
+  const clock = /(?:^|T)(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(trimmed);
+  if (clock) return `${pad(clock[1])}:${pad(clock[2])}:${pad(clock[3])}`;
+  return trimmed;
+}
+
+/**
+ * Compare a read-back proof with the expected one, ignoring whitespace the
+ * service may normalise off a note or car number.
+ */
+export function proofsMatch(actual: PlanProof, expected: PlanProof): boolean {
+  if (actual.transportationId !== expected.transportationId) return false;
+  if ((actual.note ?? '').trim() !== (expected.note ?? '').trim()) return false;
+  if (expected.earlyDismissalTime !== undefined) {
+    const want = expected.earlyDismissalTime === null ? '' : normalizeTimeOfDay(expected.earlyDismissalTime);
+    const got = actual.earlyDismissalTime ? normalizeTimeOfDay(actual.earlyDismissalTime) : '';
+    if (want !== got) return false;
+  }
+  if (expected.carNumber !== undefined) {
+    if ((actual.carNumber ?? '').trim() !== (expected.carNumber ?? '').trim()) return false;
+  }
+  return true;
 }
 
 /**
@@ -146,7 +186,8 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       await client.updatePlans(plans);
 
       // A 2xx is not proof the change persisted — re-read each date and
-      // compare the one field that proves it. ModifiedDate is deliberately not
+      // compare the fields that prove it (option, note, and the time / car
+      // number when sent). ModifiedDate is deliberately not
       // compared: it advances on its own, which would make every write look
       // successful.
       // One expectation for the whole call: every date in a single UpdatePlans
@@ -154,6 +195,8 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       const expected = expectedPlanState({
         transportationId: transportation_id,
         note: plans[0]?.Note ?? null,
+        earlyDismissalTime: plans[0]?.EarlyDismissalTime,
+        carNumber: plans[0]?.CarNumber,
       });
       const verification = await Promise.all(
         dates.map(async (date) => {
@@ -161,6 +204,8 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
           const actual: PlanProof = {
             transportationId: after.TransportationId ?? null,
             note: after.Note ?? null,
+            earlyDismissalTime: after.EarlyDismissalTime ?? null,
+            carNumber: after.CarNumber ?? null,
           };
           return {
             date,
