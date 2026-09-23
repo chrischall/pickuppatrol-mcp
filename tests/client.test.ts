@@ -132,13 +132,27 @@ describe('response handling', () => {
     );
   });
 
-  it('hints at the credentials on a 401', async () => {
+  it('hints at the credentials on a 403', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => new Response('', { status: 403 }));
+    try {
+      await client(fetchImpl).getChildren();
+      expect.unreachable('a 403 must throw');
+    } catch (err) {
+      expect((err as McpToolError).hint).toMatch(/PICKUPPATROL_USERNAME/);
+    }
+  });
+
+  // A 401 that survives the re-sign-in never reaches the response parser:
+  // the auth layer reports it as an unusable (usually two-factor) session
+  // rather than the misleading "check the password" hint.
+  it('reports a 401 that survives a fresh sign-in as an unusable session', async () => {
     const fetchImpl = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
     try {
       await client(fetchImpl).getChildren();
       expect.unreachable('a 401 must throw');
     } catch (err) {
-      expect((err as McpToolError).hint).toMatch(/PICKUPPATROL_USERNAME/);
+      expect((err as McpToolError).hint).toMatch(/two-factor/);
+      expect((err as McpToolError).hint).not.toMatch(/PICKUPPATROL_PASSWORD/);
     }
   });
 

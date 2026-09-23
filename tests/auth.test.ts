@@ -232,16 +232,46 @@ describe('withAuth', () => {
   });
 
   // A server that answers 401 unconditionally must not become a login loop
-  // against the account — one replay, then the 401 is the answer.
-  it('replays exactly once, then surfaces the 401', async () => {
+  // against the account — one replay, then stop.
+  it('replays exactly once, then fails', async () => {
     const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
     const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
     const call = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
 
-    const res = await auth.withAuth(call);
-    expect(res.status).toBe(401);
+    await expect(auth.withAuth(call)).rejects.toThrow(/rejected the session it just issued/);
     expect(call).toHaveBeenCalledTimes(2);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  // The live deployment always sets Azure's ARRAffinity cookie, so a
+  // two-factor account's login never comes back empty-handed — the jar check
+  // in login() cannot see it. What it CAN see: a session minted moments ago
+  // is rejected outright. That is permanent, and caching it stops every later
+  // call spending two more sign-ins against an account whose lockout only
+  // the support desk can clear.
+  it('treats a freshly issued session that is rejected as permanent (two-factor)', async () => {
+    const fetchImpl = mockFetch(() =>
+      jsonResponse(
+        { BearerToken: null },
+        { setCookie: ['ARRAffinity=abc; Path=/', 'ARRAffinitySameSite=abc; Path=/; SameSite=None'] },
+      ),
+    );
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    const call = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
+
+    try {
+      await auth.withAuth(call);
+      expect.unreachable('a rejected fresh session must throw');
+    } catch (err) {
+      expect((err as Error).message).toMatch(/rejected the session it just issued/);
+      expect((err as McpToolError).hint).toMatch(/two-factor/);
+    }
+    await expect(auth.withAuth(call)).rejects.toThrow(/rejected the session it just issued/);
+    await expect(auth.ensure()).rejects.toThrow(/rejected the session it just issued/);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(auth.isAuthenticated).toBe(false);
   });
 
   it('drops the cached session on invalidate', async () => {

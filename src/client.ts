@@ -103,8 +103,10 @@ export class PickUpPatrolClient {
       throw new McpToolError(
         `PickUp Patrol ${dto} failed (HTTP ${res.status})${detail ? `: ${detail}` : ''}`,
         {
+          // A 401 never gets here: withAuth() re-signs-in once and turns a
+          // second 401 into a permanent unusable-session error.
           hint:
-            res.status === 401 || res.status === 403
+            res.status === 403
               ? 'The session was rejected. Check PICKUPPATROL_USERNAME and PICKUPPATROL_PASSWORD.'
               : undefined,
         },
