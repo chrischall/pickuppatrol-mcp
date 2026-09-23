@@ -160,13 +160,23 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       // the comparison entirely: it advances by itself, which would make every
       // write look successful.
       const after = await client.getStudent(student_id);
-      const sentNote = payload.DefaultPlans?.find((p) => p.DayId === dayIds[0])?.Note ?? null;
+      // The early-dismissal time is part of the proof when one was sent: a
+      // time-only change keeps the option and note identical.
+      const sent = payload.DefaultPlans?.find((p) => p.DayId === dayIds[0]);
       const unchanged = [...new Set(dayIds)].filter((dayId) => {
         const plan = (after.DefaultPlans ?? []).find((p) => p.DayId === dayId);
         if (plan === undefined) return true;
         return !proofsMatch(
-          { transportationId: plan.TransportationId ?? null, note: plan.Note ?? null },
-          { transportationId: transportation.TransportationId, note: sentNote },
+          {
+            transportationId: plan.TransportationId ?? null,
+            note: plan.Note ?? null,
+            earlyDismissalTime: plan.EarlyDismissalTime ?? null,
+          },
+          {
+            transportationId: transportation.TransportationId,
+            note: sent?.Note ?? null,
+            earlyDismissalTime: sent?.EarlyDismissalTime ?? undefined,
+          },
         );
       });
 
