@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.0.1...v1.0.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* bound the sign-in, verify plan time/car number, and stop re-signing-in 2FA accounts ([#55](https://github.com/chrischall/pickuppatrol-mcp/issues/55)) ([f3eeffe](https://github.com/chrischall/pickuppatrol-mcp/commit/f3eeffe5bf55eb632210ed165e86ffca597f9984))
+
 ## [1.0.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.0.0...v1.0.1) (2026-09-23)
 
 
