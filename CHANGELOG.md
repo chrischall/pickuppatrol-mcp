@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.0...v1.1.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **deps:** Bump dotenv from 17.4.2 to 18.0.2 in the production-majors group ([#61](https://github.com/chrischall/pickuppatrol-mcp/issues/61)) ([40edd89](https://github.com/chrischall/pickuppatrol-mcp/commit/40edd894c33bba15d6ba0210395a2a4255747c00))
+
 ## [1.1.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.0.2...v1.1.0) (2026-09-24)
 
 
