@@ -2,25 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
 import { PickUpPatrolAuth } from '../src/auth.js';
 import { PickUpPatrolClient } from '../src/client.js';
-import { previewUnlessConfirmed } from '../src/tools/_confirm.js';
 import { registerAccountTools } from '../src/tools/account.js';
 import { registerSchoolTools } from '../src/tools/school.js';
 import { registerPlanTools } from '../src/tools/plans.js';
 import { registerDefaultPlanTools } from '../src/tools/defaults.js';
-import { makeClient, makeStudent, BUS, SCHOOL_ID, STUDENT_ID } from './helpers.js';
+import { makeClient, makeClientWithStudentWrite, makeStudent, BUS, SCHOOL_ID, STUDENT_ID } from './helpers.js';
 
-describe('previewUnlessConfirmed', () => {
-  it('omits willSend when there is no body to show', () => {
-    const result = previewUnlessConfirmed(undefined, 'Do a thing', 'PUT', 'AcceptTerms');
-    const body = JSON.parse((result?.content[0] as { text: string }).text) as Record<string, unknown>;
-    expect(body).not.toHaveProperty('willSend');
-    expect(body['dryRun']).toBe(true);
-  });
-
-  it('returns null once confirmed, so the caller proceeds', () => {
-    expect(previewUnlessConfirmed(true, 'Do a thing', 'PUT', 'AcceptTerms')).toBeNull();
-  });
-});
+// A client that shows the confirmation prompt and the user accepts it: the
+// gate passes in one call, so these tests exercise the write itself.
+const ACCEPT = {
+  elicitation: async () => ({ action: 'accept' as const, content: { confirmed: true } }),
+};
 
 // The default `fetchImpl` is the real global fetch. Exercising it against a
 // stubbed global proves the wiring without opening a socket.
@@ -161,7 +153,7 @@ describe('missing-field fallbacks', () => {
         transportation_id: BUS.TransportationId,
       }),
     );
-    expect(change['action']).toMatch(/^Set 1 date\(s\) for the student to "Bus"$/);
+    expect((change['preview'] as Record<string, unknown>)['action']).toMatch(/^Set 1 date\(s\) for the student to "Bus"$/);
 
     const revert = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
@@ -170,7 +162,7 @@ describe('missing-field fallbacks', () => {
         transportation_id: null,
       }),
     );
-    expect(revert['action']).toMatch(/^Clear 1 date\(s\) back to the student's default plan$/);
+    expect((revert['preview'] as Record<string, unknown>)['action']).toMatch(/^Clear 1 date\(s\) back to the student's default plan$/);
     await h.close();
   });
 
@@ -187,24 +179,23 @@ describe('missing-field fallbacks', () => {
         transportation_id: BUS.TransportationId,
       }),
     );
-    expect(set['action']).toMatch(/^Set the student's default plan on Tuesday/);
+    expect((set['preview'] as Record<string, unknown>)['action']).toMatch(/^Set the student's default plan on Tuesday/);
 
     const cleared = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', { student_id: STUDENT_ID, clear_all: true }),
     );
-    expect(cleared['action']).toMatch(/^Clear every weekday default for the student$/);
+    expect((cleared['preview'] as Record<string, unknown>)['action']).toMatch(/^Clear every weekday default for the student$/);
     await h.close();
   });
 
   it('reports a plan read whose fields are all absent', async () => {
     const client = makeClient({ getPlanEdit: vi.fn().mockResolvedValue({}) });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: ['2026-08-18'],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
     const applied = (result['applied'] as Array<Record<string, unknown>>)[0];
@@ -220,19 +211,16 @@ describe('missing-field fallbacks', () => {
   });
 
   it('reports a student with no defaults after a change', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(makeStudent({ DefaultPlans: null })),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({ DefaultPlans: null }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Tuesday'],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -240,18 +228,15 @@ describe('missing-field fallbacks', () => {
   });
 
   it('reports a clear-all whose re-read returned no defaults field at all', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(makeStudent({ DefaultPlans: null })),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({ DefaultPlans: null }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         clear_all: true,
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(true);

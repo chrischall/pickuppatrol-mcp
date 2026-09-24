@@ -60,14 +60,31 @@ and only reports the configuration error on the first tool call.
 | `pup_list_car_numbers` | Car numbers the school issued to this account |
 | `pup_healthcheck` | Credentials sign in and the API answers |
 
-**Writes** — every one requires `confirm: true`. Without it the tool makes no
-change and returns a dry-run of the exact payload it would send.
+**Writes** — every one asks you to confirm first. A client that can show a
+confirmation prompt (Claude Code) shows one. Otherwise the first call makes no
+change and returns a preview of the exact payload it would send plus a
+`confirmToken`, and only a repeat call with that token makes the change — see
+[Confirmations](#confirmations).
 
 | Tool | What it changes |
 |---|---|
 | `pup_set_plan` | Dismissal for one or more specific dates, or clears them back to the default |
 | `pup_set_default_plans` | The weekly default plan, or clears every default |
 | `pup_mark_defaults_reviewed` | The school's "defaults need review" prompt |
+
+### Confirmations
+
+| variable | default | |
+|---|---|---|
+| `MCP_CONFIRM_MODE` | `ask-user` | What a write does on a client that cannot show a confirmation prompt (claude.ai, Claude Desktop). `ask-user`: two steps — the first call does nothing and returns a preview plus a token, and the model must get your approval in chat before calling again with it. `auto`: the same two steps, but the model may use the token after reviewing the preview itself. `refuse`: writes are refused on such clients. A client that can show prompts (Claude Code) always gets the real prompt. An unrecognised value is treated as `refuse`. |
+| `MCP_CONFIRM_TTL_SECONDS` | `600` | How long a token stays valid. |
+| `MCP_CONFIRM_SECRET` | random per process | Signing key; set it only if tokens must survive a server restart. |
+
+A token is single-use and bound to the exact payload. The second call re-reads
+the student and rebuilds the payload, so if anything moved between the preview
+and the approval — a different date or option, or (for default plans, which
+round-trip the whole student record) a change made to the record meanwhile —
+nothing is sent and you get `DRAFT_CHANGED` with a fresh preview.
 
 ### Two things the tools do that the API does not
 

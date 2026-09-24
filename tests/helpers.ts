@@ -96,3 +96,23 @@ export function makeClient(overrides: Partial<Record<string, unknown>> = {}) {
   };
   return base as unknown as PickUpPatrolClient & typeof base;
 }
+
+/**
+ * A client whose `getStudent` returns `before` until `updateStudent` has been
+ * called, then `after`. Keyed on the write rather than on call order, because
+ * the pre-write read runs on every call — the confirmation retry included.
+ */
+export function makeClientWithStudentWrite(
+  before: Student,
+  after: Student,
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  let written = false;
+  return makeClient({
+    getStudent: vi.fn(async () => (written ? after : before)),
+    updateStudent: vi.fn(async () => {
+      written = true;
+    }),
+    ...overrides,
+  });
+}

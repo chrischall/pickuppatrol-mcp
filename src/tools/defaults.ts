@@ -6,7 +6,7 @@ import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
 import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
 import { proofsMatch, resolveTransportation } from './plans.js';
-import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { CONFIRM_FLOW, confirmTokenParam, confirmWrite } from './_confirm.js';
 
 /**
  * Accept weekdays as names ("Monday") or ids (1 = Sunday … 7 = Saturday).
@@ -67,7 +67,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     'pup_set_default_plans',
     {
       description:
-        "Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan, so it requires confirm: true; without it you get a dry-run. Read pup_list_transportations first.",
+        `Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan. ${CONFIRM_FLOW} Read pup_list_transportations first.`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         days: z
@@ -88,25 +88,32 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           .boolean()
           .optional()
           .describe('Remove every weekday default instead of setting one (days is ignored)'),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
     },
-    (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirm }) => {
+    (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirmToken }, ctx) => {
       // Read-modify-write: PickUp Patrol has no default-plans endpoint, so the
       // whole student record round-trips. Reading it here (before the confirm
-      // gate) is what makes the dry-run show the real payload; it mutates
-      // nothing.
+      // gate, on every call) is what makes the preview show the real payload;
+      // it mutates nothing. The whole record is the token's payload, so a
+      // change to it between preview and approval — which this write would
+      // otherwise silently overwrite — is refused as DRAFT_CHANGED.
       const student = await client.getStudent(student_id);
 
       if (clear_all === true) {
         const payload = clearDefaultPlans(student);
-        const gate = previewUnlessConfirmed(
-          confirm,
-          `Clear every weekday default for ${student.FirstName ?? 'the student'}`,
-          'PUT',
-          'Student',
-          { StudentId: student.StudentId, DefaultPlans: [] },
-        );
+        const gate = await confirmWrite(ctx, {
+          tool: 'pup_set_default_plans',
+          action: 'default_plans.clear',
+          summary: `Clear every weekday default for ${student.FirstName ?? 'the student'}`,
+          method: 'PUT',
+          dto: 'Student',
+          target: String(student_id),
+          revision: student.ModifiedDate,
+          payload,
+          willSend: { StudentId: student.StudentId, DefaultPlans: [] },
+          confirmToken,
+        });
         if (gate) return gate;
         await client.updateStudent(payload);
         const after = await client.getStudent(student_id);
@@ -144,10 +151,21 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       const dayNames = dayIds.map((id) => dayIdToName(id)).join(', ');
       const action = `Set ${student.FirstName ?? 'the student'}'s default plan on ${dayNames} to "${transportation.Name}"`;
 
-      const gate = previewUnlessConfirmed(confirm, action, 'PUT', 'Student', {
-        StudentId: student.StudentId,
-        DefaultPlans: payload.DefaultPlans,
-        note: 'The whole student record is sent back with only DefaultPlans changed.',
+      const gate = await confirmWrite(ctx, {
+        tool: 'pup_set_default_plans',
+        action: 'default_plans.set',
+        summary: action,
+        method: 'PUT',
+        dto: 'Student',
+        target: String(student_id),
+        revision: student.ModifiedDate,
+        payload,
+        willSend: {
+          StudentId: student.StudentId,
+          DefaultPlans: payload.DefaultPlans,
+          note: 'The whole student record is sent back with only DefaultPlans changed.',
+        },
+        confirmToken,
       });
       if (gate) return gate;
 
@@ -199,22 +217,25 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     'pup_mark_defaults_reviewed',
     {
       description:
-        "Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. Requires confirm: true.",
+        `Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. ${CONFIRM_FLOW}`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         reviewed: z.boolean().optional().describe('Defaults to true'),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
     },
-    async ({ student_id, reviewed, confirm }) => {
+    async ({ student_id, reviewed, confirmToken }, ctx) => {
       const value = reviewed ?? true;
-      const gate = previewUnlessConfirmed(
-        confirm,
-        `Mark student ${student_id}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
-        'PUT',
-        'SetDefaultsReviewed',
-        { StudentId: student_id, Reviewed: value },
-      );
+      const gate = await confirmWrite(ctx, {
+        tool: 'pup_mark_defaults_reviewed',
+        action: 'default_plans.mark_reviewed',
+        summary: `Mark student ${student_id}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
+        method: 'PUT',
+        dto: 'SetDefaultsReviewed',
+        target: String(student_id),
+        payload: { StudentId: student_id, Reviewed: value },
+        confirmToken,
+      });
       if (gate) return gate;
 
       await client.setDefaultsReviewed(student_id, value);
