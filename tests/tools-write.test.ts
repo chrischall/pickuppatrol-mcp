@@ -4,12 +4,27 @@ import { registerPlanTools } from '../src/tools/plans.js';
 import { registerDefaultPlanTools } from '../src/tools/defaults.js';
 import { expectedPlanState, normalizeTimeOfDay, proofsMatch } from '../src/tools/plans.js';
 import { parseWeekdays } from '../src/tools/defaults.js';
-import { BUS, EARLY, makeClient, makeStudent, PICKUP, SCHOOL_ID, STUDENT_ID } from './helpers.js';
+import {
+  BUS,
+  EARLY,
+  makeClient,
+  makeClientWithStudentWrite,
+  makeStudent,
+  PICKUP,
+  SCHOOL_ID,
+  STUDENT_ID,
+} from './helpers.js';
 
 const MONDAY = '2026-08-17';
 
-describe('pup_set_plan confirm gate', () => {
-  it('sends nothing and previews the exact payload without confirm', async () => {
+// A client that shows the confirmation prompt and the user accepts it: the
+// gate passes in one call, so these tests exercise the write itself.
+const ACCEPT = {
+  elicitation: async () => ({ action: 'accept' as const, content: { confirmed: true } }),
+};
+
+describe('pup_set_plan confirmation preview', () => {
+  it('sends nothing and previews the exact payload before confirmation', async () => {
     const client = makeClient();
     const h = await createTestHarness((s) => registerPlanTools(s, client));
     const result = parseToolResult<Record<string, unknown>>(
@@ -20,9 +35,10 @@ describe('pup_set_plan confirm gate', () => {
       }),
     );
 
-    expect(result['dryRun']).toBe(true);
-    expect(result['dto']).toBe('UpdatePlans');
-    expect(result['willSend']).toEqual({
+    expect(result['status']).toBe('confirmation-required');
+    const preview = result['preview'] as Record<string, unknown>;
+    expect(preview['dto']).toBe('UpdatePlans');
+    expect(preview['willSend']).toEqual({
       Plans: [
         {
           StudentId: STUDENT_ID,
@@ -56,12 +72,11 @@ describe('pup_set_plan confirm gate', () => {
 
   it('rejects an option that is not on the school list, naming the options', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = await h.callTool('pup_set_plan', {
       student_id: STUDENT_ID,
       dates: [MONDAY],
       transportation_id: 999,
-      confirm: true,
     });
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toMatch(/No dismissal option 999/);
@@ -74,13 +89,12 @@ describe('pup_set_plan confirm gate', () => {
 describe('pup_set_plan write', () => {
   it('writes and then re-reads each date to prove the change landed', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
 
@@ -112,14 +126,13 @@ describe('pup_set_plan write', () => {
         Note: 'the old note',
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: BUS.TransportationId,
         note: 'the new note',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -134,14 +147,13 @@ describe('pup_set_plan write', () => {
         Note: 'the new note',
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: BUS.TransportationId,
         note: 'the new note',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(true);
@@ -158,13 +170,12 @@ describe('pup_set_plan write', () => {
         IsLocked: true,
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -183,13 +194,12 @@ describe('pup_set_plan write', () => {
         Note: null,
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: null,
-        confirm: true,
       }),
     );
     expect(client.updatePlans).toHaveBeenCalledWith([
@@ -205,13 +215,12 @@ describe('pup_set_plan write', () => {
         .fn()
         .mockResolvedValue({ TransportationId: EARLY.TransportationId, EarlyDismissalTime: '13:00:00' }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     await h.callTool('pup_set_plan', {
       student_id: STUDENT_ID,
       dates: [MONDAY],
       transportation_id: EARLY.TransportationId,
       early_dismissal_time: '13:00',
-      confirm: true,
     });
     expect(client.updatePlans).toHaveBeenCalledWith([
       expect.objectContaining({ EarlyDismissalTime: '13:00:00' }),
@@ -233,7 +242,7 @@ describe('pup_set_plan verification beyond option and note', () => {
         EarlyDismissalTime: '14:30:00',
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
@@ -241,7 +250,6 @@ describe('pup_set_plan verification beyond option and note', () => {
         transportation_id: EARLY.TransportationId,
         note: 'Mom picking up',
         early_dismissal_time: '13:00',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -257,7 +265,7 @@ describe('pup_set_plan verification beyond option and note', () => {
         EarlyDismissalTime: '13:00:00',
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
@@ -265,7 +273,6 @@ describe('pup_set_plan verification beyond option and note', () => {
         transportation_id: EARLY.TransportationId,
         note: 'Mom picking up',
         early_dismissal_time: '13:00',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(true);
@@ -288,14 +295,13 @@ describe('pup_set_plan verification beyond option and note', () => {
         CarNumber: '12',
       }),
     });
-    const h = await createTestHarness((s) => registerPlanTools(s, client));
+    const h = await createTestHarness((s) => registerPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_plan', {
         student_id: STUDENT_ID,
         dates: [MONDAY],
         transportation_id: CAR_LINE.TransportationId,
         car_number: '47',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -424,33 +430,28 @@ describe('pup_set_default_plans', () => {
         transportation_id: BUS.TransportationId,
       }),
     );
-    expect(result['dryRun']).toBe(true);
-    expect(result['dto']).toBe('Student');
+    expect(result['status']).toBe('confirmation-required');
+    expect((result['preview'] as Record<string, unknown>)['dto']).toBe('Student');
     expect(client.updateStudent).not.toHaveBeenCalled();
     await h.close();
   });
 
   it('sends the whole student record back with only DefaultPlans changed', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(
-          makeStudent({
-            DefaultPlans: [
-              { DayId: 2, TransportationId: PICKUP.TransportationId },
-              { DayId: 3, TransportationId: BUS.TransportationId, TransportationName: 'Bus' },
-            ],
-          }),
-        ),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({
+        DefaultPlans: [
+          { DayId: 2, TransportationId: PICKUP.TransportationId },
+          { DayId: 3, TransportationId: BUS.TransportationId, TransportationName: 'Bus' },
+        ],
+      }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Tuesday'],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
 
@@ -464,26 +465,21 @@ describe('pup_set_default_plans', () => {
   });
 
   it('catches a default whose note did not change, though the option matches', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(
-          makeStudent({
-            DefaultPlans: [
-              { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the old note' },
-            ],
-          }),
-        ),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({
+        DefaultPlans: [
+          { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the old note' },
+        ],
+      }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Monday'],
         transportation_id: PICKUP.TransportationId,
         note: 'the new note',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -492,31 +488,26 @@ describe('pup_set_default_plans', () => {
   });
 
   it('catches a default whose early-dismissal time did not change', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(
-          makeStudent({
-            DefaultPlans: [
-              {
-                DayId: 2,
-                TransportationId: EARLY.TransportationId,
-                Note: null,
-                EarlyDismissalTime: '14:30:00',
-              },
-            ],
-          }),
-        ),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({
+        DefaultPlans: [
+          {
+            DayId: 2,
+            TransportationId: EARLY.TransportationId,
+            Note: null,
+            EarlyDismissalTime: '14:30:00',
+          },
+        ],
+      }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Monday'],
         transportation_id: EARLY.TransportationId,
         early_dismissal_time: '13:00',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -525,26 +516,21 @@ describe('pup_set_default_plans', () => {
   });
 
   it('passes a default change when the option and the note both landed', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(
-          makeStudent({
-            DefaultPlans: [
-              { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the new note' },
-            ],
-          }),
-        ),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({
+        DefaultPlans: [
+          { DayId: 2, TransportationId: PICKUP.TransportationId, Note: 'the new note' },
+        ],
+      }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Monday'],
         transportation_id: PICKUP.TransportationId,
         note: 'the new note',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(true);
@@ -552,20 +538,17 @@ describe('pup_set_default_plans', () => {
   });
 
   it('treats a weekday that came back with no option at all as unchanged', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(makeStudent({ DefaultPlans: [{ DayId: 2 }] })),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({ DefaultPlans: [{ DayId: 2 }] }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Monday'],
         transportation_id: PICKUP.TransportationId,
         note: 'a note',
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -574,13 +557,12 @@ describe('pup_set_default_plans', () => {
 
   it('reports the weekdays that did not take', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         days: ['Saturday'],
         transportation_id: BUS.TransportationId,
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -589,18 +571,15 @@ describe('pup_set_default_plans', () => {
   });
 
   it('clears every default and verifies the list is empty', async () => {
-    const client = makeClient({
-      getStudent: vi
-        .fn()
-        .mockResolvedValueOnce(makeStudent())
-        .mockResolvedValueOnce(makeStudent({ DefaultPlans: [] })),
-    });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({ DefaultPlans: [] }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         clear_all: true,
-        confirm: true,
       }),
     );
     expect(client.updateStudent).toHaveBeenCalledWith(
@@ -616,19 +595,18 @@ describe('pup_set_default_plans', () => {
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', { student_id: STUDENT_ID, clear_all: true }),
     );
-    expect(result['dryRun']).toBe(true);
+    expect(result['status']).toBe('confirmation-required');
     expect(client.updateStudent).not.toHaveBeenCalled();
     await h.close();
   });
 
   it('warns when a clear-all left defaults behind', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_set_default_plans', {
         student_id: STUDENT_ID,
         clear_all: true,
-        confirm: true,
       }),
     );
     expect(result['verified']).toBe(false);
@@ -667,7 +645,7 @@ describe('pup_mark_defaults_reviewed', () => {
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID }),
     );
-    expect(result['dryRun']).toBe(true);
+    expect(result['status']).toBe('confirmation-required');
     expect(client.setDefaultsReviewed).not.toHaveBeenCalled();
     await h.close();
   });
@@ -678,9 +656,9 @@ describe('pup_mark_defaults_reviewed', () => {
         .fn()
         .mockResolvedValue([{ StudentId: STUDENT_ID, NeedsReview: false }]),
     });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
-      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID, confirm: true }),
+      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID }),
     );
     expect(client.setDefaultsReviewed).toHaveBeenCalledWith(STUDENT_ID, true);
     expect(result['verified']).toBe(true);
@@ -689,12 +667,11 @@ describe('pup_mark_defaults_reviewed', () => {
 
   it('can set the flag back on, and verifies that too', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_mark_defaults_reviewed', {
         student_id: STUDENT_ID,
         reviewed: false,
-        confirm: true,
       }),
     );
     expect(client.setDefaultsReviewed).toHaveBeenCalledWith(STUDENT_ID, false);
@@ -704,9 +681,9 @@ describe('pup_mark_defaults_reviewed', () => {
 
   it('reports an unverified result when the flag did not move', async () => {
     const client = makeClient();
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
-      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID, confirm: true }),
+      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID }),
     );
     expect(result['verified']).toBe(false);
     await h.close();
@@ -714,9 +691,9 @@ describe('pup_mark_defaults_reviewed', () => {
 
   it('treats a student missing from the review list as not needing review', async () => {
     const client = makeClient({ getDefaultPlansReviewNeeded: vi.fn().mockResolvedValue([]) });
-    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
     const result = parseToolResult<Record<string, unknown>>(
-      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID, confirm: true }),
+      await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID }),
     );
     expect(result['needsDefaultsReview']).toBe(false);
     await h.close();

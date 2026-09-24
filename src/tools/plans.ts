@@ -5,7 +5,7 @@ import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
 import type { PlanUpdate, Transportation } from '../types.js';
-import { previewUnlessConfirmed, schemaConfirm } from './_confirm.js';
+import { CONFIRM_FLOW, confirmTokenParam, confirmWrite } from './_confirm.js';
 
 /**
  * The fields whose change proves a plan write actually landed.
@@ -128,7 +128,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
     'pup_set_plan',
     {
       description:
-        "Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school, so it requires confirm: true; without it you get a dry-run of the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.",
+        `Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school. ${CONFIRM_FLOW} The preview shows the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         dates: z
@@ -151,15 +151,16 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
           .string()
           .optional()
           .describe('Car number, for options where usesCarNumbers is true'),
-        confirm: schemaConfirm,
+        confirmToken: confirmTokenParam,
       }),
     },
-    (async ({ student_id, dates, transportation_id, note, early_dismissal_time, car_number, confirm }) => {
+    (async ({ student_id, dates, transportation_id, note, early_dismissal_time, car_number, confirmToken }, ctx) => {
       // The reads below resolve and validate the payload; they mutate nothing.
-      // Running them before the confirm gate is deliberate: it makes the
-      // dry-run show the exact bytes that would be sent, already checked
-      // against this school's rules, instead of an unvalidated echo of the
-      // arguments.
+      // Running them before the confirm gate — on every call, both phases — is
+      // deliberate: it makes the preview show the exact bytes that would be
+      // sent, already checked against this school's rules, and phase 2 hashes
+      // a freshly rebuilt payload, so anything that moved since the preview is
+      // refused as DRAFT_CHANGED.
       const student = await client.getStudent(student_id);
       const transportation =
         transportation_id === null
@@ -180,7 +181,16 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
           ? `Clear ${dates.length} date(s) back to ${student.FirstName ?? 'the student'}'s default plan`
           : `Set ${dates.length} date(s) for ${student.FirstName ?? 'the student'} to "${transportation.Name}"`;
 
-      const gate = previewUnlessConfirmed(confirm, action, 'PUT', 'UpdatePlans', { Plans: plans });
+      const gate = await confirmWrite(ctx, {
+        tool: 'pup_set_plan',
+        action: 'plans.set',
+        summary: action,
+        method: 'PUT',
+        dto: 'UpdatePlans',
+        target: String(student_id),
+        payload: { Plans: plans },
+        confirmToken,
+      });
       if (gate) return gate;
 
       await client.updatePlans(plans);
