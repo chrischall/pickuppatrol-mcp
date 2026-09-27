@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.1...v1.1.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **deps:** Bump the production-dependencies group with 2 updates ([#64](https://github.com/chrischall/pickuppatrol-mcp/issues/64)) ([996c613](https://github.com/chrischall/pickuppatrol-mcp/commit/996c613bd9361298346592bd534c6e127a9e9657))
+
 ## [1.1.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.0...v1.1.1) (2026-09-24)
 
 
