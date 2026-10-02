@@ -54,3 +54,9 @@ of any comparison, or every write reports success.
 A rejected sign-in is cached as a permanent error and never retried:
 PickUp Patrol counts attempts against the account and a lockout clears only
 through their support desk. Transient failures (5xx, network) stay retryable.
+
+A CDN/WAF refusal page (Cloudflare block, CloudFront "request could not be
+satisfied", …) is an `EdgeBlockedError`, never a rejected sign-in: it is not
+cached as permanent, and a 401 refusal page on an API call keeps the session
+rather than spending a re-login. `pup_healthcheck` reports it as
+`edge_blocked` via the shared `runCredentialHealthcheck` ladder.

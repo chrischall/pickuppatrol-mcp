@@ -58,7 +58,7 @@ and only reports the configuration error on the first tool call.
 | `pup_get_school` | School profile, notify times, cutoff times, settings |
 | `pup_list_non_school_days` | Dates no plan can be set for, and dates already changed |
 | `pup_list_car_numbers` | Car numbers the school issued to this account |
-| `pup_healthcheck` | Credentials sign in and the API answers |
+| `pup_healthcheck` | Credentials sign in and the API answers; on failure, `error.kind` says which hop broke (`edge_blocked`, `credential_rejected`, …) |
 
 **Writes** — every one asks you to confirm first. A client that can show a
 confirmation prompt (Claude Code) shows one. Otherwise the first call makes no

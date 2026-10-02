@@ -62,6 +62,7 @@ export function makeStudent(overrides: Partial<Student> = {}): Student {
 export function makeClient(overrides: Partial<Record<string, unknown>> = {}) {
   const student = makeStudent();
   const base = {
+    credentialSource: vi.fn().mockReturnValue('env'),
     getSession: vi.fn().mockResolvedValue({
       UserId: 42,
       DisplayName: 'Chris Hall',
