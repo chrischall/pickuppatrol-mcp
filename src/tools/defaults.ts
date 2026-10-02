@@ -1,12 +1,18 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
+import {
+  CONFIRM_FLOW_SENTENCE,
+  confirmTokenParam,
+  confirmWrite,
+  McpToolError,
+  minifiedResult,
+} from '@chrischall/mcp-utils';
+import { BASE_PATH } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
 import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
 import { proofsMatch, resolveTransportation } from './plans.js';
-import { CONFIRM_FLOW, confirmTokenParam, confirmWrite } from './_confirm.js';
 
 /**
  * Accept weekdays as names ("Monday") or ids (1 = Sunday … 7 = Saturday).
@@ -67,7 +73,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     'pup_set_default_plans',
     {
       description:
-        `Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan. ${CONFIRM_FLOW} Read pup_list_transportations first.`,
+        `Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan. ${CONFIRM_FLOW_SENTENCE} Read pup_list_transportations first.`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         days: z
@@ -106,12 +112,12 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           tool: 'pup_set_default_plans',
           action: 'default_plans.clear',
           summary: `Clear every weekday default for ${student.FirstName ?? 'the student'}`,
-          method: 'PUT',
-          dto: 'Student',
+          account: undefined,
           target: String(student_id),
           revision: student.ModifiedDate,
-          payload,
+          request: { method: 'PUT', path: `${BASE_PATH}/Student`, body: payload },
           willSend: { StudentId: student.StudentId, DefaultPlans: [] },
+          preview: { dto: 'Student' },
           confirmToken,
         });
         if (gate) return gate;
@@ -155,16 +161,16 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         tool: 'pup_set_default_plans',
         action: 'default_plans.set',
         summary: action,
-        method: 'PUT',
-        dto: 'Student',
+        account: undefined,
         target: String(student_id),
         revision: student.ModifiedDate,
-        payload,
+        request: { method: 'PUT', path: `${BASE_PATH}/Student`, body: payload },
         willSend: {
           StudentId: student.StudentId,
           DefaultPlans: payload.DefaultPlans,
           note: 'The whole student record is sent back with only DefaultPlans changed.',
         },
+        preview: { dto: 'Student' },
         confirmToken,
       });
       if (gate) return gate;
@@ -217,7 +223,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     'pup_mark_defaults_reviewed',
     {
       description:
-        `Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. ${CONFIRM_FLOW}`,
+        `Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. ${CONFIRM_FLOW_SENTENCE}`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         reviewed: z.boolean().optional().describe('Defaults to true'),
@@ -230,10 +236,10 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         tool: 'pup_mark_defaults_reviewed',
         action: 'default_plans.mark_reviewed',
         summary: `Mark student ${student_id}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
-        method: 'PUT',
-        dto: 'SetDefaultsReviewed',
+        account: undefined,
         target: String(student_id),
-        payload: { StudentId: student_id, Reviewed: value },
+        request: { method: 'PUT', path: `${BASE_PATH}/SetDefaultsReviewed`, body: { StudentId: student_id, Reviewed: value } },
+        preview: { dto: 'SetDefaultsReviewed' },
         confirmToken,
       });
       if (gate) return gate;

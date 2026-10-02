@@ -1,11 +1,17 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { McpToolError, minifiedResult } from '@chrischall/mcp-utils';
+import {
+  CONFIRM_FLOW_SENTENCE,
+  confirmTokenParam,
+  confirmWrite,
+  McpToolError,
+  minifiedResult,
+} from '@chrischall/mcp-utils';
+import { BASE_PATH } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
 import type { PlanUpdate, Transportation } from '../types.js';
-import { CONFIRM_FLOW, confirmTokenParam, confirmWrite } from './_confirm.js';
 
 /**
  * The fields whose change proves a plan write actually landed.
@@ -128,7 +134,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
     'pup_set_plan',
     {
       description:
-        `Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school. ${CONFIRM_FLOW} The preview shows the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.`,
+        `Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school. ${CONFIRM_FLOW_SENTENCE} The preview shows the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.`,
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         dates: z
@@ -185,10 +191,10 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
         tool: 'pup_set_plan',
         action: 'plans.set',
         summary: action,
-        method: 'PUT',
-        dto: 'UpdatePlans',
+        account: undefined,
         target: String(student_id),
-        payload: { Plans: plans },
+        request: { method: 'PUT', path: `${BASE_PATH}/UpdatePlans`, body: { Plans: plans } },
+        preview: { dto: 'UpdatePlans' },
         confirmToken,
       });
       if (gate) return gate;

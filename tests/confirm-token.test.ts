@@ -3,6 +3,8 @@ import { createTestHarness, parseToolResult, type TestHarness } from '@chrischal
 import type { McpServer } from '@modelcontextprotocol/server';
 import { registerPlanTools } from '../src/tools/plans.js';
 import { registerDefaultPlanTools } from '../src/tools/defaults.js';
+import { CONFIRM_FLOW_SENTENCE } from '@chrischall/mcp-utils';
+import { BASE_PATH } from '../src/auth.js';
 import { BUS, makeClient, makeStudent, SCHOOL_ID, STUDENT_ID } from './helpers.js';
 
 const MONDAY = '2026-08-17';
@@ -84,6 +86,8 @@ describe.each(CASES)('$tool $args two-step confirmation', ({ tool, args, write, 
     const preview = first['preview'] as Body;
     expect(preview['method']).toBe('PUT');
     expect(preview['dto']).toBe(dto);
+    // The shared confirmWrite binds and shows the real request path too.
+    expect(preview['path']).toBe(`${BASE_PATH}/${dto}`);
     expect(preview).toHaveProperty('willSend');
     expect(typeof preview['action']).toBe('string');
     expect(write(client)).not.toHaveBeenCalled();
@@ -92,6 +96,17 @@ describe.each(CASES)('$tool $args two-step confirmation', ({ tool, args, write, 
     expect(second.isError).toBeFalsy();
     expect(parseToolResult<Body>(second)['status']).toBeUndefined();
     expect(write(client)).toHaveBeenCalledTimes(1);
+    await h.close();
+  });
+});
+
+describe('gated tool descriptions', () => {
+  it('end with the shared CONFIRM_FLOW_SENTENCE', async () => {
+    const h = await noPrompt(makeClient());
+    const { tools } = await h.client.listTools();
+    const gated = tools.filter((t) => ['pup_set_plan', 'pup_set_default_plans', 'pup_mark_defaults_reviewed'].includes(t.name));
+    expect(gated).toHaveLength(3);
+    for (const t of gated) expect(t.description).toContain(CONFIRM_FLOW_SENTENCE);
     await h.close();
   });
 });
