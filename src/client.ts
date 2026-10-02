@@ -1,11 +1,18 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { loadDotenvSafely, McpToolError, buildQueryString } from '@chrischall/mcp-utils';
+import {
+  loadDotenvSafely,
+  McpToolError,
+  buildQueryString,
+  EdgeBlockedError,
+  detectEdgeBlock,
+} from '@chrischall/mcp-utils';
 import {
   PickUpPatrolAuth,
   BASE_URL,
   BASE_PATH,
   REQUEST_TIMEOUT_MS,
+  SERVICE,
   describeResponseStatus,
 } from './auth.js';
 import type { AuthOptions, FetchLike, PupSession } from './auth.js';
@@ -53,6 +60,11 @@ export class PickUpPatrolClient {
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
   }
 
+  /** Where the credentials came from (`'env'`), or `null` — for the healthcheck. */
+  credentialSource(): string | null {
+    return this.auth.credentialSource;
+  }
+
   /** Request a DTO by name. GET args go on the query string, others in the body. */
   async call<T>(
     method: 'GET' | 'POST' | 'PUT' | 'PATCH',
@@ -71,7 +83,7 @@ export class PickUpPatrolClient {
       }),
     );
 
-    return this.parse<T>(res, dto);
+    return this.parse<T>(res, method, dto);
   }
 
   private headers(session: PupSession): Record<string, string> {
@@ -84,10 +96,20 @@ export class PickUpPatrolClient {
     return headers;
   }
 
-  private async parse<T>(res: Response, dto: string): Promise<T> {
+  private async parse<T>(res: Response, method: string, dto: string): Promise<T> {
     const text = await res.text();
 
     if (!res.ok) {
+      // A CDN/WAF refusal page never reached PickUp Patrol: say so, rather than
+      // blaming the credentials (chrischall/mcp-host#1015).
+      const edge = detectEdgeBlock({ body: text, status: res.status, headers: res.headers });
+      if (edge !== null) {
+        throw new EdgeBlockedError(res.status, edge.vendor, {
+          service: SERVICE,
+          method,
+          path: `${BASE_PATH}/${dto}`,
+        });
+      }
       // ServiceStack returns its error envelope as JSON, but a gateway or an
       // auth redirect can return HTML — so the parse is best-effort and the
       // status is always part of the message.

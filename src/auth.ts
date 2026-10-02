@@ -1,4 +1,10 @@
-import { readEnvVar, McpToolError, CookieJar } from '@chrischall/mcp-utils';
+import {
+  readEnvVar,
+  McpToolError,
+  CookieJar,
+  EdgeBlockedError,
+  detectEdgeBlock,
+} from '@chrischall/mcp-utils';
 import type { AuthenticateResponse, ResponseStatus } from './types.js';
 
 export const BASE_URL = 'https://app.pickuppatrol.net';
@@ -45,6 +51,50 @@ export function describeResponseStatus(status: ResponseStatus | null | undefined
   return fieldError?.Message ?? status.Message ?? status.ErrorCode ?? null;
 }
 
+/** The service name {@link EdgeBlockedError} messages carry. */
+export const SERVICE = 'PickUp Patrol';
+
+/**
+ * PickUp Patrol JUDGED the username and password and refused them. Its own
+ * class so the healthcheck can say `credential_rejected` without matching
+ * message prose.
+ */
+export class SignInRejectedError extends McpToolError {
+  constructor(message: string, hint: string) {
+    super(message, { hint });
+    this.name = 'SignInRejectedError';
+  }
+}
+
+/**
+ * The sign-in "succeeded" but produced no usable session — in practice a
+ * two-factor account, which this server does not complete.
+ */
+export class UnusableSessionError extends McpToolError {
+  constructor(message: string, hint: string) {
+    super(message, { hint });
+    this.name = 'UnusableSessionError';
+  }
+}
+
+/**
+ * Was this response refused by a CDN/WAF in front of PickUp Patrol rather than
+ * by PickUp Patrol? Reads a CLONE, so the caller's body stays readable. A JSON
+ * body is never a refusal page, so it is not read.
+ */
+export async function edgeBlockOfResponse(res: Response): Promise<{ vendor: string } | null> {
+  const byHeaders = detectEdgeBlock({ status: res.status, headers: res.headers });
+  if (byHeaders !== null) return byHeaders;
+  if (/json/i.test(String(res.headers.get('content-type')))) return null;
+  let body: string;
+  try {
+    body = await res.clone().text();
+  } catch {
+    return null;
+  }
+  return detectEdgeBlock({ body, status: res.status, headers: res.headers });
+}
+
 /**
  * Owns the login lifecycle: one lazy, single-flight sign-in; a cached
  * *permanent* failure for anything that means "these credentials will never
@@ -85,6 +135,15 @@ export class PickUpPatrolAuth {
 
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
     this.timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+  }
+
+  /**
+   * Where the credentials came from, for the healthcheck — `'env'` when a
+   * username and password are configured (from the environment or the
+   * constructor), `null` when they are not. Never the credential itself.
+   */
+  get credentialSource(): string | null {
+    return this.configError ? null : 'env';
   }
 
   /** True once a login has succeeded — used by the healthcheck tool. */
@@ -131,23 +190,35 @@ export class PickUpPatrolAuth {
    * ARRAffinity cookie means the jar is never empty), so this is where it is
    * caught, and it is cached as permanent: otherwise every later call would
    * spend two more sign-ins against the account.
+   *
+   * A 401 that is a CDN/WAF refusal page is NOT a rejected session: the
+   * request never reached PickUp Patrol, so the session is kept, no sign-in is
+   * spent, and the block is reported as an {@link EdgeBlockedError}
+   * (chrischall/mcp-host#1015).
    */
   async withAuth(call: (session: PupSession) => Promise<Response>): Promise<Response> {
     const first = await call(await this.ensure());
     if (first.status !== 401) return first;
+    await this.throwIfEdgeBlocked(first);
 
     this.invalidate();
     const replay = await call(await this.ensure());
     if (replay.status !== 401) return replay;
+    await this.throwIfEdgeBlocked(replay);
 
     this.invalidate();
-    this.permanentError = new McpToolError(
+    this.permanentError = new UnusableSessionError(
       'PickUp Patrol accepted the sign-in but rejected the session it just issued',
-      {
-        hint: 'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check, then restart the server.',
-      },
+      'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check, then restart the server.',
     );
     throw this.permanentError;
+  }
+
+  private async throwIfEdgeBlocked(res: Response): Promise<void> {
+    const edge = await edgeBlockOfResponse(res);
+    if (edge !== null) {
+      throw new EdgeBlockedError(res.status, edge.vendor, { service: SERVICE });
+    }
   }
 
   private async login(): Promise<PupSession> {
@@ -158,7 +229,7 @@ export class PickUpPatrolAuth {
     // body read below.
     const signal = AbortSignal.timeout(this.timeoutMs);
     let res: Response;
-    let body: AuthenticateResponse | null;
+    let text: string;
     try {
       res = await this.fetchImpl(`${BASE_URL}${BASE_PATH}/Authenticate`, {
         method: 'POST',
@@ -172,10 +243,10 @@ export class PickUpPatrolAuth {
         redirect: 'manual',
         signal,
       });
-      body = (await res.json().catch((err: unknown) => {
+      text = await res.text().catch((err: unknown) => {
         if (signal.aborted) throw err;
-        return null;
-      })) as AuthenticateResponse | null;
+        return '';
+      });
     } catch (err) {
       // Transient: a timeout says nothing about the credentials, so it is
       // never cached as permanentError and the next call signs in afresh.
@@ -188,15 +259,34 @@ export class PickUpPatrolAuth {
       throw err;
     }
 
+    let body: AuthenticateResponse | null = null;
+    try {
+      body = JSON.parse(text) as AuthenticateResponse | null;
+    } catch {
+      // Not JSON: a gateway page, or a CDN/WAF refusal page. A refusal never
+      // reached PickUp Patrol, so the credentials were not judged — it is
+      // reported as a block and never cached as permanent, so the next call
+      // signs in afresh (chrischall/mcp-host#1015).
+      const edge = detectEdgeBlock({ body: text, status: res.status, headers: res.headers });
+      if (edge !== null) {
+        throw new EdgeBlockedError(res.status, edge.vendor, {
+          service: SERVICE,
+          method: 'POST',
+          path: `${BASE_PATH}/Authenticate`,
+        });
+      }
+    }
+
     if (!res.ok) {
       const detail = describeResponseStatus(body?.ResponseStatus);
       const code = body?.ResponseStatus?.ErrorCode ?? '';
-      const error = new McpToolError(
-        `PickUp Patrol rejected the sign-in${detail ? `: ${detail}` : ` (HTTP ${res.status})`}`,
-        {
-          hint: 'Check PICKUPPATROL_USERNAME and PICKUPPATROL_PASSWORD against https://app.pickuppatrol.net/.',
-        },
-      );
+      const message = `PickUp Patrol rejected the sign-in${detail ? `: ${detail}` : ` (HTTP ${res.status})`}`;
+      const hint = 'Check PICKUPPATROL_USERNAME and PICKUPPATROL_PASSWORD against https://app.pickuppatrol.net/.';
+      // Only a credential the service JUDGED is a rejection. A 5xx or an
+      // unexplained 4xx stays a plain error, so the healthcheck reports it by
+      // status rather than sending someone to change a working password.
+      const judged = res.status >= 400 && res.status < 500 && code.startsWith('LOGIN-ERROR');
+      const error = judged ? new SignInRejectedError(message, hint) : new McpToolError(message, { hint });
 
       // A credential the service has *judged* is never retried. PickUp Patrol
       // counts failures against the account and clearing a lockout goes
@@ -204,7 +294,7 @@ export class PickUpPatrolAuth {
       // auth path we have. Caching the error means every later call fails
       // instantly with the same message instead of spending another attempt.
       // A 5xx or a network blip is left transient so the next call retries.
-      if (res.status >= 400 && res.status < 500 && code.startsWith('LOGIN-ERROR')) {
+      if (judged) {
         this.permanentError = error;
       }
       throw error;
@@ -217,11 +307,9 @@ export class PickUpPatrolAuth {
     const cookieHeader = collectCookieHeader(res);
     const bearerToken = body?.BearerToken ?? null;
     if (!bearerToken && !cookieHeader) {
-      this.permanentError = new McpToolError(
+      this.permanentError = new UnusableSessionError(
         'PickUp Patrol accepted the sign-in but returned no session token or cookie',
-        {
-          hint: 'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check.',
-        },
+        'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check.',
       );
       throw this.permanentError;
     }

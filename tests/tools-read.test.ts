@@ -170,7 +170,8 @@ describe('pup_healthcheck', () => {
     const h = await createTestHarness((s) => registerAccountTools(s, client));
     const result = parseToolResult<Record<string, unknown>>(await h.callTool('pup_healthcheck'));
     expect(result['ok']).toBe(false);
-    expect(result['error']).toMatch(/PICKUPPATROL_PASSWORD/);
+    expect(result['error']).toMatchObject({ message: expect.stringMatching(/PICKUPPATROL_PASSWORD/) });
+    expect(typeof (result['error'] as { kind?: unknown }).kind).toBe('string');
     await h.close();
   });
 

@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { messageOf, minifiedResult } from '@chrischall/mcp-utils';
+import { minifiedResult } from '@chrischall/mcp-utils';
+import { runCredentialHealthcheck } from '@chrischall/mcp-utils/healthcheck';
+import { SignInRejectedError, UnusableSessionError } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { dayIdToName } from '../dates.js';
-import type { DefaultPlan, Student } from '../types.js';
+import type { DefaultPlan, SessionResponse, Student } from '../types.js';
 import { VERSION } from '../version.js';
 
 /** Project a student down to the fields a parent actually asks about. */
@@ -104,24 +106,48 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     'pup_healthcheck',
     {
       description:
-        'Verify the configured credentials sign in and the PickUp Patrol API answers. Reports the server version and the students the account can see.',
+        "Verify the configured credentials sign in and the PickUp Patrol API answers. Reports the server version, the students the account can see, and — when it fails — an error.kind saying which hop broke: no_credential (nothing configured), credential_rejected (PickUp Patrol refused the username/password), verification_pending (a two-factor account), edge_blocked (a CDN/WAF refused the request before PickUp Patrol saw it, so the credentials were never judged), timeout, transport or http. Read-only; never returns the credentials.",
       annotations: { readOnlyHint: true },
     },
     async () => {
-      try {
-        const session = await client.getSession();
-        return minifiedResult({
-          ok: true,
-          version: VERSION,
-          signedInAs: session.Email ?? session.PrimaryEmail ?? session.DisplayName ?? null,
-          studentCount: session.Children?.length ?? 0,
-        });
-      } catch (err) {
-        // A healthcheck reports rather than throws: the whole point is to say
-        // what is wrong, and an exception here reads to the host as the tool
-        // itself being broken.
-        return minifiedResult({ ok: false, version: VERSION, error: messageOf(err) });
-      }
+      let session: SessionResponse | undefined;
+      // A healthcheck reports rather than throws: the whole point is to say
+      // what is wrong, and an exception here reads to the host as the tool
+      // itself being broken. The shared ladder supplies the `kind`
+      // (chrischall/mcp-host#1015); the account facts ride beside it.
+      const shared = await runCredentialHealthcheck({
+        server,
+        prefix: 'pup',
+        hostLabel: 'app.pickuppatrol.net',
+        probePath: '/api/json/reply/GetSession',
+        resolveCredential: async () => ({ source: client.credentialSource() }),
+        probeFn: async () => {
+          session = await client.getSession();
+        },
+        classifyThrown: classifyPupError,
+      });
+      const result = JSON.parse(shared.content[0]!.text) as Record<string, unknown>;
+      return minifiedResult({
+        ...result,
+        version: VERSION,
+        ...(session !== undefined
+          ? {
+              signedInAs: session.Email ?? session.PrimaryEmail ?? session.DisplayName ?? null,
+              studentCount: session.Children?.length ?? 0,
+            }
+          : {}),
+      });
     },
   );
+}
+
+/**
+ * Name the PickUp Patrol failures the shared status ladder cannot see: its
+ * sign-in rejection and two-factor errors carry no HTTP status. Anything else
+ * (an edge block, a timeout, a 5xx) falls through to the shared ladder.
+ */
+export function classifyPupError(err: unknown): { kind: string; hint?: string } | undefined {
+  if (err instanceof SignInRejectedError) return { kind: 'credential_rejected', hint: err.hint };
+  if (err instanceof UnusableSessionError) return { kind: 'verification_pending', hint: err.hint };
+  return undefined;
 }

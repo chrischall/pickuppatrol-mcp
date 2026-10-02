@@ -171,7 +171,7 @@ describe('PickUpPatrolAuth', () => {
           ok: true,
           status: 200,
           headers: new Headers(),
-          json: () =>
+          text: () =>
             new Promise((_resolve, reject) => {
               init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
             }),
