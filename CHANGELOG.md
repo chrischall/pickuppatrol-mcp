@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.3](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.2...v1.1.3) (2026-10-03)
+
+
+### Bug Fixes
+
+* **deps:** adopt @chrischall/mcp-utils 2.12.0 confirmWrite kit ([#71](https://github.com/chrischall/pickuppatrol-mcp/issues/71)) ([9a61483](https://github.com/chrischall/pickuppatrol-mcp/commit/9a6148394ab4f5872126bb9ba203e748ed18abe4))
+* **deps:** bump @chrischall/mcp-utils to 2.10.0 ([#69](https://github.com/chrischall/pickuppatrol-mcp/issues/69)) ([1cbe0c4](https://github.com/chrischall/pickuppatrol-mcp/commit/1cbe0c4a48e6d179b323385dde687098e8d087a5))
+* **deps:** bump @chrischall/mcp-utils to 2.13.0 ([#73](https://github.com/chrischall/pickuppatrol-mcp/issues/73)) ([f4acc15](https://github.com/chrischall/pickuppatrol-mcp/commit/f4acc154038610fe2da2ee1ae0a894f4159137cf))
+* **healthcheck:** report why pup_healthcheck failed and stop blaming the password for CDN blocks ([#72](https://github.com/chrischall/pickuppatrol-mcp/issues/72)) ([a573be2](https://github.com/chrischall/pickuppatrol-mcp/commit/a573be2d0541e5eace9b255aa1b0446aac3bcaf3))
+* keep write approvals valid across a hosted restart (mcp-utils 2.11.0) ([#70](https://github.com/chrischall/pickuppatrol-mcp/issues/70)) ([ade0037](https://github.com/chrischall/pickuppatrol-mcp/commit/ade00371d8fbc2f6e1afd68bb0e7d25802dd3965))
+* report CDN/WAF blocks as edge_blocked, not a rejected credential (mcp-utils 2.9.0) ([#66](https://github.com/chrischall/pickuppatrol-mcp/issues/66)) ([110eab0](https://github.com/chrischall/pickuppatrol-mcp/commit/110eab0261efaff38bb677425892fc2ba2ddb837))
+
 ## [1.1.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.1...v1.1.2) (2026-09-27)
 
 
