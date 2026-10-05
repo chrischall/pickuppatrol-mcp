@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.3...v1.1.4) (2026-10-05)
+
+
+### Bug Fixes
+
+* **deps:** Bump dotenv from 18.0.3 to 18.0.5 in the production-dependencies group ([#76](https://github.com/chrischall/pickuppatrol-mcp/issues/76)) ([db3f91e](https://github.com/chrischall/pickuppatrol-mcp/commit/db3f91e230d8b51e2b66bcd40216ab5df1790841))
+* **deps:** require @chrischall/mcp-utils 2.14.0 and MCP SDK 2.3.0 ([#78](https://github.com/chrischall/pickuppatrol-mcp/issues/78)) ([420fde1](https://github.com/chrischall/pickuppatrol-mcp/commit/420fde1ba48359728eef0abaf4740fb3a77e54c3))
+
 ## [1.1.3](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.2...v1.1.3) (2026-10-03)
 
 
