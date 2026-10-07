@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.4...v1.2.0) (2026-10-07)
+
+
+### Features
+
+* **deps:** support MCP_CONFIRM_ELICITATION=off for clients that never show confirmation prompts ([#79](https://github.com/chrischall/pickuppatrol-mcp/issues/79)) ([c38eac3](https://github.com/chrischall/pickuppatrol-mcp/commit/c38eac3db2fbd1c5de7a385dd4d2e5ad43ae1081))
+
+
+### Documentation
+
+* document MCP_CONFIRM_ELICITATION ([#81](https://github.com/chrischall/pickuppatrol-mcp/issues/81)) ([b93f62e](https://github.com/chrischall/pickuppatrol-mcp/commit/b93f62ee5f5c92ce1757f6cc42bdd91545205d19))
+
 ## [1.1.4](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.3...v1.1.4) (2026-10-05)
 
 
