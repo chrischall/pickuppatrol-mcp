@@ -61,7 +61,8 @@ and only reports the configuration error on the first tool call.
 | `pup_healthcheck` | Credentials sign in and the API answers; on failure, `error.kind` says which hop broke (`edge_blocked`, `credential_rejected`, …) |
 
 **Writes** — every one asks you to confirm first. A client that can show a
-confirmation prompt (Claude Code) shows one. Otherwise the first call makes no
+confirmation prompt (Claude Code) shows one, unless `MCP_CONFIRM_ELICITATION=off`.
+Otherwise the first call makes no
 change and returns a preview of the exact payload it would send plus a
 `confirmToken`, and only a repeat call with that token makes the change — see
 [Confirmations](#confirmations).
@@ -76,7 +77,8 @@ change and returns a preview of the exact payload it would send plus a
 
 | variable | default | |
 |---|---|---|
-| `MCP_CONFIRM_MODE` | `ask-user` | What a write does on a client that cannot show a confirmation prompt (claude.ai, Claude Desktop). `ask-user`: two steps — the first call does nothing and returns a preview plus a token, and the model must get your approval in chat before calling again with it. `auto`: the same two steps, but the model may use the token after reviewing the preview itself. `refuse`: writes are refused on such clients. A client that can show prompts (Claude Code) always gets the real prompt. An unrecognised value is treated as `refuse`. |
+| `MCP_CONFIRM_MODE` | `ask-user` | What a write does on a client that cannot show a confirmation prompt (claude.ai, Claude Desktop). `ask-user`: two steps — the first call does nothing and returns a preview plus a token, and the model must get your approval in chat before calling again with it. `auto`: the same two steps, but the model may use the token after reviewing the preview itself. `refuse`: writes are refused on such clients. A client that can show prompts (Claude Code) always gets the real prompt, unless `MCP_CONFIRM_ELICITATION=off`. An unrecognised value is treated as `refuse`. |
+| `MCP_CONFIRM_ELICITATION` | `on` | `off` never shows a confirmation prompt, so every client gets the `MCP_CONFIRM_MODE` path. Set it for a client that claims to support prompts but never shows one (the write hangs — opencode 2.0.x). Any other value stays `on`, with a warning on stderr. |
 | `MCP_CONFIRM_TTL_SECONDS` | `600` | How long a token stays valid. |
 | `MCP_CONFIRM_SECRET` | random per process | Signing key; set it only if tokens must survive a server restart. On mcp-host the host supplies a stable per-child key (`MCP_HOST_CONFIRM_SECRET`) and spent tokens are recorded under `MCP_DATA_DIR`, so an approval survives an idle restart. |
 
