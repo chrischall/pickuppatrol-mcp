@@ -13,6 +13,16 @@ export const BASE_PATH = '/api/json/reply';
 /** Upper bound on any one request to PickUp Patrol, sign-in included. */
 export const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * How long a "sign-in accepted, fresh session rejected" result is held before
+ * the next call may sign in again. That result is inferred from two 401s, not
+ * judged by the service (a session-store blip during an Azure slot swap looks
+ * the same), so it must not brick a long-running server until restart — but
+ * holding it a while keeps a genuine two-factor account from spending two
+ * sign-ins on every call.
+ */
+export const UNUSABLE_SESSION_COOLDOWN_MS = 10 * 60_000;
+
 /** Minimal `fetch` seam so tests never open a socket. */
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -39,6 +49,8 @@ export interface AuthOptions {
   fetchImpl?: FetchLike;
   /** Sign-in timeout; defaults to `REQUEST_TIMEOUT_MS`. A test seam. */
   timeoutMs?: number;
+  /** Clock for the unusable-session cool-down; defaults to `Date.now`. A test seam. */
+  now?: () => number;
 }
 
 /**
@@ -106,10 +118,14 @@ export class PickUpPatrolAuth {
   private readonly configError: Error | null;
   private readonly fetchImpl: FetchLike;
   private readonly timeoutMs: number;
+  private readonly now: () => number;
 
   private session: PupSession | null = null;
   private inFlight: Promise<PupSession> | null = null;
   private permanentError: Error | null = null;
+  /** The double-401 latch: held until `unusableUntil`, then lifted. */
+  private unusableError: Error | null = null;
+  private unusableUntil = 0;
 
   constructor(opts: AuthOptions = {}) {
     const username = opts.username ?? readEnvVar('PICKUPPATROL_USERNAME');
@@ -135,6 +151,7 @@ export class PickUpPatrolAuth {
 
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init));
     this.timeoutMs = opts.timeoutMs ?? REQUEST_TIMEOUT_MS;
+    this.now = opts.now ?? Date.now;
   }
 
   /**
@@ -158,6 +175,10 @@ export class PickUpPatrolAuth {
   async ensure(): Promise<PupSession> {
     if (this.configError) throw this.configError;
     if (this.permanentError) throw this.permanentError;
+    if (this.unusableError) {
+      if (this.now() < this.unusableUntil) throw this.unusableError;
+      this.unusableError = null;
+    }
     if (this.session) return this.session;
     if (this.inFlight) return this.inFlight;
 
@@ -193,8 +214,10 @@ export class PickUpPatrolAuth {
    * "succeeding" without producing a usable session — in practice a
    * two-factor account. The login-time check cannot see that (Azure's
    * ARRAffinity cookie means the jar is never empty), so this is where it is
-   * caught, and it is cached as permanent: otherwise every later call would
-   * spend two more sign-ins against the account.
+   * caught. It is held for {@link UNUSABLE_SESSION_COOLDOWN_MS} — otherwise
+   * every later call would spend two more sign-ins against the account — but
+   * not forever: it is inferred from a status code, not judged by the
+   * service, so a transient session-store failure must not brick the server.
    *
    * A 401 that is a CDN/WAF refusal page is NOT a rejected session: the
    * request never reached PickUp Patrol, so the session is kept, no sign-in is
@@ -217,11 +240,12 @@ export class PickUpPatrolAuth {
     await this.throwIfEdgeBlocked(replay);
 
     this.invalidateIfCurrent(replaySession);
-    this.permanentError = new UnusableSessionError(
+    this.unusableError = new UnusableSessionError(
       'PickUp Patrol accepted the sign-in but rejected the session it just issued',
-      'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check, then restart the server.',
+      `This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check. To spare the account further sign-ins, the server waits ${UNUSABLE_SESSION_COOLDOWN_MS / 60_000} minutes before trying again.`,
     );
-    throw this.permanentError;
+    this.unusableUntil = this.now() + UNUSABLE_SESSION_COOLDOWN_MS;
+    throw this.unusableError;
   }
 
   private async throwIfEdgeBlocked(res: Response): Promise<void> {
