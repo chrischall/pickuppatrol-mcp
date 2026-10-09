@@ -32,7 +32,6 @@ describe('default fetch wiring', () => {
     const auth = new PickUpPatrolAuth({ username: 'u', password: 'p', fetchImpl: vi.fn() });
     vi.spyOn(auth, 'ensure').mockResolvedValue({
       bearerToken: 'jwt',
-      refreshToken: null,
       cookieHeader: '',
     });
     await expect(new PickUpPatrolClient({ auth }).getChildren()).resolves.toEqual([]);

@@ -10,7 +10,6 @@ function stubAuth(overrides: Partial<{ bearerToken: string | null; cookieHeader:
   // these tests exist to cover — so check for the key instead.
   vi.spyOn(auth, 'ensure').mockResolvedValue({
     bearerToken: 'bearerToken' in overrides ? (overrides.bearerToken ?? null) : 'jwt-abc',
-    refreshToken: null,
     cookieHeader: 'cookieHeader' in overrides ? (overrides.cookieHeader ?? '') : 'ss-id=abc',
   });
   return auth;

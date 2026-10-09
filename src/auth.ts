@@ -37,8 +37,6 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export interface PupSession {
   /** `Authorization: Bearer …`, when the deployment issues JWTs. */
   bearerToken: string | null;
-  /** Exchangeable for a fresh bearer token via `GetAccessToken`. */
-  refreshToken: string | null;
   /** `Cookie:` header value built from every `Set-Cookie` the login returned. */
   cookieHeader: string;
 }
@@ -348,7 +346,7 @@ export class PickUpPatrolAuth {
       throw this.permanentError;
     }
 
-    return { bearerToken, refreshToken: body?.RefreshToken ?? null, cookieHeader };
+    return { bearerToken, cookieHeader };
   }
 }
 

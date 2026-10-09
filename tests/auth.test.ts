@@ -57,7 +57,7 @@ describe('PickUpPatrolAuth', () => {
     );
     const session = await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
     expect(session.bearerToken).toBe('jwt-abc');
-    expect(session.refreshToken).toBe('refresh-xyz');
+    expect(session).not.toHaveProperty('refreshToken');
   });
 
   // The live deployment authenticates by session cookie: the SPA reads a
