@@ -177,7 +177,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
     {
       description:
         `Day-by-day dismissal plans across a date range for every student on the account: the option in force, its note, and the weekly default it overrides. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         start_date: z.string().describe('YYYY-MM-DD'),
         end_date: z.string().describe('YYYY-MM-DD'),
@@ -198,7 +198,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
     {
       description:
         `The dismissal plan for one student on one date — the option in force, any note, the early-dismissal time, and whether the date is locked because the cutoff has passed. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         date: z.string().describe('YYYY-MM-DD'),

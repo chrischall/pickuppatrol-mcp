@@ -19,14 +19,14 @@
         {
           "name": "PICKUPPATROL_USERNAME",
           "description": "The email address you sign in to app.pickuppatrol.net with",
-          "isRequired": true,
+          "isRequired": false,
           "format": "string",
           "isSecret": false
         },
         {
           "name": "PICKUPPATROL_PASSWORD",
           "description": "Your PickUp Patrol password",
-          "isRequired": true,
+          "isRequired": false,
           "format": "string",
           "isSecret": true
         }

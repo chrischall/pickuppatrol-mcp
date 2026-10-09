@@ -38,6 +38,27 @@ describe('tool annotations', () => {
     expect(missing).toEqual([]);
   });
 
+  // Every tool here talks to PickUp Patrol over the network; none is local.
+  it('marks every tool openWorldHint: true', async () => {
+    const tools = await listAnnotated();
+    const notOpen = [...tools].filter(([, a]) => a?.openWorldHint !== true).map(([n]) => n);
+    expect(notOpen).toEqual([]);
+  });
+
+  // destructiveHint defaults to TRUE when absent, so a write that omits it
+  // publishes as destructive; and a read that claims destructive is noise.
+  it('gives every write an explicit boolean destructiveHint and no read claims destructive', async () => {
+    const tools = await listAnnotated();
+    const writesMissing = [...tools]
+      .filter(([, a]) => a?.readOnlyHint === false && typeof a.destructiveHint !== 'boolean')
+      .map(([n]) => n);
+    const readsDestructive = [...tools]
+      .filter(([, a]) => a?.readOnlyHint === true && a.destructiveHint === true)
+      .map(([n]) => n);
+    expect(writesMissing).toEqual([]);
+    expect(readsDestructive).toEqual([]);
+  });
+
   it.each(['pup_set_plan', 'pup_set_default_plans'])(
     '%s says it is a destructive, idempotent write against an open world',
     async (name) => {

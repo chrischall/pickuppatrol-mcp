@@ -85,7 +85,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     {
       description:
         `The dismissal options a school offers (bus, car pickup, walker, absent …) with the rules each one imposes: whether a note is required, whether it takes a car number, whether it is an early dismissal, and the daily cutoff time. Read this before setting a plan. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
         include_inactive: z
@@ -106,7 +106,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     {
       description:
         `A school profile together with its per-weekday notify times and plan cutoff times, and the settings that decide whether parents may set plans at all. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
         raw: z
@@ -138,7 +138,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     {
       description:
         'Dates a plan cannot be set for at a school (holidays, closures, weekends), and optionally the dates in a range that already differ from the student defaults.',
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
         start_date: z
@@ -163,7 +163,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     {
       description:
         'The car numbers a school has issued to this account, for dismissal options where usesCarNumbers is true.',
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
       }),
