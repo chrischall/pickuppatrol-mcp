@@ -274,6 +274,59 @@ describe('withAuth', () => {
     expect(auth.isAuthenticated).toBe(false);
   });
 
+  // Two calls that both rode the expired session and both got 401: the first
+  // re-signs in; the second must reuse that fresh session rather than
+  // invalidate it and spend another sign-in against the account.
+  it('does not throw away a session another caller just re-minted', async () => {
+    let n = 0;
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: `jwt-${++n}` }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    await auth.ensure();
+
+    let releaseStale: () => void = () => undefined;
+    const bothStale = new Promise<void>((resolve) => (releaseStale = resolve));
+    let staleCalls = 0;
+    const call = vi.fn(async (session: { bearerToken: string | null }) => {
+      if (session.bearerToken === 'jwt-1') {
+        if (++staleCalls === 2) releaseStale();
+        await bothStale;
+        return new Response('', { status: 401 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const results = await Promise.all([auth.withAuth(call), auth.withAuth(call)]);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not throw away a session minted after the failed call, even once settled', async () => {
+    let n = 0;
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: `jwt-${++n}` }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    await auth.ensure();
+
+    // The first call's 401 arrives only after another caller has fully
+    // replaced the session.
+    let other: Promise<Response> | null = null;
+    const call = vi.fn(async (session: { bearerToken: string | null }) => {
+      if (session.bearerToken === 'jwt-1') {
+        if (other === null) {
+          other = auth.withAuth(async (s) =>
+            new Response('{}', { status: s.bearerToken === 'jwt-1' ? 401 : 200 }),
+          );
+          await other;
+        }
+        return new Response('', { status: 401 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const res = await auth.withAuth(call);
+    expect(res.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('drops the cached session on invalidate', async () => {
     const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
     const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });

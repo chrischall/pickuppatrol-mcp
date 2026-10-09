@@ -178,6 +178,11 @@ export class PickUpPatrolAuth {
     this.session = null;
   }
 
+  /** Drop the cached session only if it is still `session`. */
+  private invalidateIfCurrent(session: PupSession): void {
+    if (this.session === session) this.session = null;
+  }
+
   /**
    * Run an authenticated request. On a 401 the session is dropped, re-minted
    * once and the call replayed exactly once — never more, so a server that
@@ -197,16 +202,21 @@ export class PickUpPatrolAuth {
    * (chrischall/mcp-host#1015).
    */
   async withAuth(call: (session: PupSession) => Promise<Response>): Promise<Response> {
-    const first = await call(await this.ensure());
+    const used = await this.ensure();
+    const first = await call(used);
     if (first.status !== 401) return first;
     await this.throwIfEdgeBlocked(first);
 
-    this.invalidate();
-    const replay = await call(await this.ensure());
+    // Only drop the session this call actually used. A concurrent caller may
+    // already have re-minted it; throwing that fresh session away would spend
+    // another sign-in against the account for nothing.
+    this.invalidateIfCurrent(used);
+    const replaySession = await this.ensure();
+    const replay = await call(replaySession);
     if (replay.status !== 401) return replay;
     await this.throwIfEdgeBlocked(replay);
 
-    this.invalidate();
+    this.invalidateIfCurrent(replaySession);
     this.permanentError = new UnusableSessionError(
       'PickUp Patrol accepted the sign-in but rejected the session it just issued',
       'This usually means the account has two-factor authentication enabled, which this server does not yet complete. Sign in at https://app.pickuppatrol.net/ to check, then restart the server.',
