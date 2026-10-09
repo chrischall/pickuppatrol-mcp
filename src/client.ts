@@ -65,6 +65,11 @@ export class PickUpPatrolClient {
     return this.auth.credentialSource;
   }
 
+  /** The account writes run as, for binding confirmation tokens. */
+  account(): string | undefined {
+    return this.auth.account;
+  }
+
   /** Request a DTO by name. GET args go on the query string, others in the body. */
   async call<T>(
     method: 'GET' | 'POST' | 'PUT' | 'PATCH',

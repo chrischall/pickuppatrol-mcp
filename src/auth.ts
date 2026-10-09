@@ -161,6 +161,16 @@ export class PickUpPatrolAuth {
     return this.configError ? null : 'env';
   }
 
+  /**
+   * The account writes run as — the configured username, case-folded so
+   * `Parent@x` and `parent@x` are one account — or `undefined` when none is
+   * configured. Bound into every confirmation token, so under a shared
+   * `MCP_CONFIRM_SECRET` an approval for one account never acts as another.
+   */
+  get account(): string | undefined {
+    return this.username === null ? undefined : this.username.trim().toLowerCase();
+  }
+
   /** True once a login has succeeded — used by the healthcheck tool. */
   get isAuthenticated(): boolean {
     return this.session !== null;

@@ -36,6 +36,13 @@ describe('PickUpPatrolAuth', () => {
     );
   });
 
+  it('names the account writes run as, case-folded, and none when unconfigured', () => {
+    expect(new PickUpPatrolAuth({ username: ' Parent@Example.com ', password: 'x' }).account).toBe(
+      'parent@example.com',
+    );
+    expect(new PickUpPatrolAuth({ fetchImpl: vi.fn() }).account).toBeUndefined();
+  });
+
   it('posts the credentials DTO the web app posts', async () => {
     const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
     await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();

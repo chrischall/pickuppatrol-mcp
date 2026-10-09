@@ -100,6 +100,31 @@ describe.each(CASES)('$tool $args two-step confirmation', ({ tool, args, write, 
   });
 });
 
+// Under one shared MCP_CONFIRM_SECRET (the natural hosted configuration) a
+// token must not verify for another tenant's server: it is bound to the
+// account the write runs as.
+describe.each(CASES)('$tool $args account binding', ({ tool, args, write }) => {
+  it('refuses a token minted for a different account', async () => {
+    process.env['MCP_CONFIRM_SECRET'] = 'shared-across-tenants';
+    const mine = makeClient();
+    const theirs = makeClient({ account: vi.fn().mockReturnValue('other-parent@example.com') });
+    const hMine = await noPrompt(mine);
+    const hTheirs = await noPrompt(theirs);
+
+    const first = await phaseOne(hMine, tool, args);
+    const replayed = await hTheirs.callTool(tool, { ...args, confirmToken: first['confirmToken'] });
+    expect(replayed.isError).toBe(true);
+    expect(write(theirs)).not.toHaveBeenCalled();
+
+    // The same token still works for the account it was minted for.
+    const own = await hMine.callTool(tool, { ...args, confirmToken: first['confirmToken'] });
+    expect(own.isError).toBeFalsy();
+    expect(write(mine)).toHaveBeenCalledTimes(1);
+    await hMine.close();
+    await hTheirs.close();
+  });
+});
+
 describe('gated tool descriptions', () => {
   it('end with the shared CONFIRM_FLOW_SENTENCE', async () => {
     const h = await noPrompt(makeClient());

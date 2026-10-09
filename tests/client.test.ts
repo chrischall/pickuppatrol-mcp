@@ -19,6 +19,12 @@ function client(fetchImpl: ReturnType<typeof vi.fn>, authOverrides = {}) {
   return new PickUpPatrolClient({ auth: stubAuth(authOverrides), fetchImpl });
 }
 
+describe('account', () => {
+  it('reports the account the auth signs in as, for binding confirmations', () => {
+    expect(client(vi.fn()).account()).toBe('u');
+  });
+});
+
 describe('request shape', () => {
   it('puts GET args on the query string of the DTO url', async () => {
     const fetchImpl = vi.fn().mockImplementation(async () => new Response('[]'));

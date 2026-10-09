@@ -192,7 +192,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
         tool: 'pup_set_plan',
         action: 'plans.set',
         summary: action,
-        account: undefined,
+        account: client.account(),
         target: String(student_id),
         request: { method: 'PUT', path: `${BASE_PATH}/UpdatePlans`, body: { Plans: plans } },
         preview: { dto: 'UpdatePlans' },
