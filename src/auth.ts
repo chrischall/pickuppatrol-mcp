@@ -37,6 +37,13 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export interface PupSession {
   /** `Authorization: Bearer …`, when the deployment issues JWTs. */
   bearerToken: string | null;
+  /**
+   * The login's `RefreshToken`, if any. Nothing in this package reads it.
+   *
+   * @deprecated Unused; kept only because `PupSession` is public library
+   * surface. It will be removed in the next major release.
+   */
+  refreshToken: string | null;
   /** `Cookie:` header value built from every `Set-Cookie` the login returned. */
   cookieHeader: string;
 }
@@ -356,7 +363,7 @@ export class PickUpPatrolAuth {
       throw this.permanentError;
     }
 
-    return { bearerToken, cookieHeader };
+    return { bearerToken, refreshToken: body?.RefreshToken ?? null, cookieHeader };
   }
 }
 
