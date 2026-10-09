@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { versionSyncTest } from '@chrischall/mcp-utils/test';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +70,18 @@ describe('packaging', () => {
       skills: string;
     };
     expect(plugin.skills).toBe('./skills/');
+  });
+
+  // Claude Code reads the plugin's MCP config from `mcpServers`; an `mcp` key
+  // is silently ignored and only worked here because ./.mcp.json is the
+  // default. Copies with a non-default path broke their plugin installs.
+  it('declares the MCP config under mcpServers, pointing at a real file', () => {
+    const plugin = JSON.parse(
+      readFileSync(join(root, '.claude-plugin/plugin.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(plugin).not.toHaveProperty('mcp');
+    expect(plugin['mcpServers']).toBe('./.mcp.json');
+    expect(existsSync(join(root, plugin['mcpServers'] as string))).toBe(true);
   });
 });
 
