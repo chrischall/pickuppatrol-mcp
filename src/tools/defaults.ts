@@ -234,10 +234,13 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     },
     async ({ student_id, reviewed, confirmToken }, ctx) => {
       const value = reviewed ?? true;
+      // Read first so the prompt names the child, like the sibling writes: a
+      // parent with two children cannot tell whose flag a bare id refers to.
+      const student = await client.getStudent(student_id);
       const gate = await confirmWrite(ctx, {
         tool: 'pup_mark_defaults_reviewed',
         action: 'default_plans.mark_reviewed',
-        summary: `Mark student ${student_id}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
+        summary: `Mark ${student.FirstName ?? `student ${student_id}`}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
         account: undefined,
         target: String(student_id),
         request: { method: 'PUT', path: `${BASE_PATH}/SetDefaultsReviewed`, body: { StudentId: student_id, Reviewed: value } },

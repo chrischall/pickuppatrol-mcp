@@ -650,6 +650,36 @@ describe('pup_mark_defaults_reviewed', () => {
     await h.close();
   });
 
+  // A parent with two children must be able to tell from the prompt whose
+  // review flag they are clearing — the sibling writes name the child too.
+  it('names the child in the confirmation, not the numeric id', async () => {
+    const client = makeClient();
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const raw = JSON.stringify(
+      parseToolResult<Record<string, unknown>>(
+        await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID }),
+      ),
+    );
+    expect(raw).toContain("Mark Lucas's defaults as reviewed");
+    expect(raw).not.toContain(`student ${STUDENT_ID}'s`);
+    expect(client.getStudent).toHaveBeenCalledWith(STUDENT_ID);
+    await h.close();
+  });
+
+  it('falls back to the id when the student has no first name', async () => {
+    const client = makeClient({
+      getStudent: vi.fn().mockResolvedValue(makeStudent({ FirstName: null })),
+    });
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client));
+    const raw = JSON.stringify(
+      parseToolResult<Record<string, unknown>>(
+        await h.callTool('pup_mark_defaults_reviewed', { student_id: STUDENT_ID, reviewed: false }),
+      ),
+    );
+    expect(raw).toContain(`Mark student ${STUDENT_ID}'s defaults as not reviewed`);
+    await h.close();
+  });
+
   it('marks reviewed and verifies the prompt cleared', async () => {
     const client = makeClient({
       getDefaultPlansReviewNeeded: vi
