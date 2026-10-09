@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { McpToolError } from '@chrischall/mcp-utils';
-import { PickUpPatrolAuth, collectCookieHeader, describeResponseStatus } from '../src/auth.js';
+import {
+  PickUpPatrolAuth,
+  UNUSABLE_SESSION_COOLDOWN_MS,
+  collectCookieHeader,
+  describeResponseStatus,
+} from '../src/auth.js';
 
 function jsonResponse(
   body: unknown,
@@ -31,6 +36,13 @@ describe('PickUpPatrolAuth', () => {
     );
   });
 
+  it('names the account writes run as, case-folded, and none when unconfigured', () => {
+    expect(new PickUpPatrolAuth({ username: ' Parent@Example.com ', password: 'x' }).account).toBe(
+      'parent@example.com',
+    );
+    expect(new PickUpPatrolAuth({ fetchImpl: vi.fn() }).account).toBeUndefined();
+  });
+
   it('posts the credentials DTO the web app posts', async () => {
     const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
     await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
@@ -52,7 +64,7 @@ describe('PickUpPatrolAuth', () => {
     );
     const session = await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
     expect(session.bearerToken).toBe('jwt-abc');
-    expect(session.refreshToken).toBe('refresh-xyz');
+    expect(session).not.toHaveProperty('refreshToken');
   });
 
   // The live deployment authenticates by session cookie: the SPA reads a
@@ -246,10 +258,10 @@ describe('withAuth', () => {
   // The live deployment always sets Azure's ARRAffinity cookie, so a
   // two-factor account's login never comes back empty-handed — the jar check
   // in login() cannot see it. What it CAN see: a session minted moments ago
-  // is rejected outright. That is permanent, and caching it stops every later
+  // is rejected outright. Holding that (for a cool-down) stops every later
   // call spending two more sign-ins against an account whose lockout only
   // the support desk can clear.
-  it('treats a freshly issued session that is rejected as permanent (two-factor)', async () => {
+  it('holds a freshly issued session that is rejected (two-factor) without signing in again', async () => {
     const fetchImpl = mockFetch(() =>
       jsonResponse(
         { BearerToken: null },
@@ -272,6 +284,97 @@ describe('withAuth', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(call).toHaveBeenCalledTimes(2);
     expect(auth.isAuthenticated).toBe(false);
+  });
+
+  // Two calls that both rode the expired session and both got 401: the first
+  // re-signs in; the second must reuse that fresh session rather than
+  // invalidate it and spend another sign-in against the account.
+  it('does not throw away a session another caller just re-minted', async () => {
+    let n = 0;
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: `jwt-${++n}` }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    await auth.ensure();
+
+    let releaseStale: () => void = () => undefined;
+    const bothStale = new Promise<void>((resolve) => (releaseStale = resolve));
+    let staleCalls = 0;
+    const call = vi.fn(async (session: { bearerToken: string | null }) => {
+      if (session.bearerToken === 'jwt-1') {
+        if (++staleCalls === 2) releaseStale();
+        await bothStale;
+        return new Response('', { status: 401 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const results = await Promise.all([auth.withAuth(call), auth.withAuth(call)]);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not throw away a session minted after the failed call, even once settled', async () => {
+    let n = 0;
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: `jwt-${++n}` }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    await auth.ensure();
+
+    // The first call's 401 arrives only after another caller has fully
+    // replaced the session.
+    let other: Promise<Response> | null = null;
+    const call = vi.fn(async (session: { bearerToken: string | null }) => {
+      if (session.bearerToken === 'jwt-1') {
+        if (other === null) {
+          other = auth.withAuth(async (s) =>
+            new Response('{}', { status: s.bearerToken === 'jwt-1' ? 401 : 200 }),
+          );
+          await other;
+        }
+        return new Response('', { status: 401 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const res = await auth.withAuth(call);
+    expect(res.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  // A rejected fresh session is inferred from a status code, not judged by the
+  // service: a session-store blip during a slot swap looks the same. So the
+  // latch holds for a cool-down (no sign-in spent meanwhile) and then lifts,
+  // rather than bricking a long-running server until restart.
+  it('lifts the rejected-fresh-session latch after the cool-down', async () => {
+    let now = 1_000_000;
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl, now: () => now });
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValue(new Response('{}', { status: 200 }));
+
+    await expect(auth.withAuth(call)).rejects.toThrow(/rejected the session it just issued/);
+    now += UNUSABLE_SESSION_COOLDOWN_MS - 1;
+    await expect(auth.ensure()).rejects.toThrow(/rejected the session it just issued/);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    now += 1;
+    const res = await auth.withAuth(call);
+    expect(res.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('says when it will try again rather than asking for a restart', async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl });
+    const call = vi.fn().mockImplementation(async () => new Response('', { status: 401 }));
+    try {
+      await auth.withAuth(call);
+      expect.unreachable('a rejected fresh session must throw');
+    } catch (err) {
+      expect((err as McpToolError).hint).toMatch(/10 minutes/);
+      expect((err as McpToolError).hint).not.toMatch(/restart/);
+    }
   });
 
   it('drops the cached session on invalidate', async () => {

@@ -63,6 +63,7 @@ export function makeClient(overrides: Partial<Record<string, unknown>> = {}) {
   const student = makeStudent();
   const base = {
     credentialSource: vi.fn().mockReturnValue('env'),
+    account: vi.fn().mockReturnValue('parent@example.com'),
     getSession: vi.fn().mockResolvedValue({
       UserId: 42,
       DisplayName: 'Chris Hall',

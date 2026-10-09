@@ -74,6 +74,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     {
       description:
         `Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan. ${CONFIRM_FLOW_SENTENCE} Read pup_list_transportations first.`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         days: z
@@ -90,6 +91,10 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           .string()
           .optional()
           .describe('HH:MM, required when the option is an early dismissal'),
+        car_number: z
+          .string()
+          .optional()
+          .describe("Car number, for options where usesCarNumbers is true; omit to keep the weekday's current number"),
         clear_all: z
           .boolean()
           .optional()
@@ -97,7 +102,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         confirmToken: confirmTokenParam,
       }),
     },
-    (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirmToken }, ctx) => {
+    (async ({ student_id, days, transportation_id, note, early_dismissal_time, car_number, clear_all, confirmToken }, ctx) => {
       // Read-modify-write: PickUp Patrol has no default-plans endpoint, so the
       // whole student record round-trips. Reading it here (before the confirm
       // gate, on every call) is what makes the preview show the real payload;
@@ -112,7 +117,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           tool: 'pup_set_default_plans',
           action: 'default_plans.clear',
           summary: `Clear every weekday default for ${student.FirstName ?? 'the student'}`,
-          account: undefined,
+          account: client.account(),
           target: String(student_id),
           revision: student.ModifiedDate,
           request: { method: 'PUT', path: `${BASE_PATH}/Student`, body: payload },
@@ -152,6 +157,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         transportation,
         note,
         earlyDismissalTime: early_dismissal_time,
+        carNumber: car_number,
       });
 
       const dayNames = dayIds.map((id) => dayIdToName(id)).join(', ');
@@ -161,7 +167,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         tool: 'pup_set_default_plans',
         action: 'default_plans.set',
         summary: action,
-        account: undefined,
+        account: client.account(),
         target: String(student_id),
         revision: student.ModifiedDate,
         request: { method: 'PUT', path: `${BASE_PATH}/Student`, body: payload },
@@ -195,11 +201,15 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
             transportationId: plan.TransportationId ?? null,
             note: plan.Note ?? null,
             earlyDismissalTime: plan.EarlyDismissalTime ?? null,
+            carNumber: plan.CarNumber ?? null,
           },
           {
             transportationId: transportation.TransportationId,
             note: sent?.Note ?? null,
             earlyDismissalTime: sent?.EarlyDismissalTime ?? undefined,
+            // A number the caller sent is part of the proof: a number-only
+            // change keeps the option and note identical.
+            carNumber: car_number !== undefined ? (sent?.CarNumber ?? null) : undefined,
           },
         );
       });
@@ -224,6 +234,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     {
       description:
         `Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. ${CONFIRM_FLOW_SENTENCE}`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         reviewed: z.boolean().optional().describe('Defaults to true'),
@@ -232,11 +243,14 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     },
     async ({ student_id, reviewed, confirmToken }, ctx) => {
       const value = reviewed ?? true;
+      // Read first so the prompt names the child, like the sibling writes: a
+      // parent with two children cannot tell whose flag a bare id refers to.
+      const student = await client.getStudent(student_id);
       const gate = await confirmWrite(ctx, {
         tool: 'pup_mark_defaults_reviewed',
         action: 'default_plans.mark_reviewed',
-        summary: `Mark student ${student_id}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
-        account: undefined,
+        summary: `Mark ${student.FirstName ?? `student ${student_id}`}'s defaults as ${value ? 'reviewed' : 'not reviewed'}`,
+        account: client.account(),
         target: String(student_id),
         request: { method: 'PUT', path: `${BASE_PATH}/SetDefaultsReviewed`, body: { StudentId: student_id, Reviewed: value } },
         preview: { dto: 'SetDefaultsReviewed' },

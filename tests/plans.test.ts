@@ -272,7 +272,65 @@ describe('applyDefaultPlans', () => {
       TransportationName: 'Bus',
       Note: 'Route 7',
       EarlyDismissalTime: undefined,
+      CarNumber: null,
+      UseCarNumbers: false,
     });
+  });
+
+  // The whole record is PUT back, so a car-rider day switched to the bus
+  // must not keep the old car number and flag.
+  it('clears a stale car number when a day moves off a car-number option', () => {
+    const carDay: Student = {
+      ...student,
+      DefaultPlans: [
+        { DayId: 2, TransportationId: 41249, TransportationName: 'Car line', CarNumber: '12', UseCarNumbers: true },
+      ],
+    };
+    const result = applyDefaultPlans({
+      student: carDay,
+      dayIds: [2],
+      transportation: option({ TransportationId: 41245, Name: 'Bus' }),
+    });
+    expect(result.DefaultPlans?.[0]).toMatchObject({ CarNumber: null, UseCarNumbers: false });
+  });
+
+  it('sets the car number on a car-number option', () => {
+    const result = applyDefaultPlans({
+      student,
+      dayIds: [3],
+      transportation: option({ TransportationId: 41249, Name: 'Car line', UseCarNumbers: true }),
+      carNumber: ' 47 ',
+    });
+    expect(result.DefaultPlans?.find((p) => p.DayId === 3)).toMatchObject({
+      TransportationId: 41249,
+      CarNumber: '47',
+      UseCarNumbers: true,
+    });
+  });
+
+  it('has no number to keep when the car-number day never recorded one', () => {
+    const result = applyDefaultPlans({
+      student: { ...student, DefaultPlans: [{ DayId: 2, UseCarNumbers: true }] },
+      dayIds: [2],
+      transportation: option({ TransportationId: 41249, Name: 'Car line', UseCarNumbers: true }),
+    });
+    expect(result.DefaultPlans?.[0]).toMatchObject({ CarNumber: null, UseCarNumbers: true });
+  });
+
+  it('keeps the day’s existing car number when none is given for a car-number option', () => {
+    const carDay: Student = {
+      ...student,
+      DefaultPlans: [{ DayId: 2, TransportationId: 41249, CarNumber: '12', UseCarNumbers: true }],
+    };
+    const result = applyDefaultPlans({
+      student: carDay,
+      dayIds: [2, 4],
+      transportation: option({ TransportationId: 41249, Name: 'Car line', UseCarNumbers: true }),
+      note: 'changed',
+    });
+    expect(result.DefaultPlans?.find((p) => p.DayId === 2)).toMatchObject({ CarNumber: '12', UseCarNumbers: true });
+    // A day that had no car-number default has nothing to keep.
+    expect(result.DefaultPlans?.find((p) => p.DayId === 4)).toMatchObject({ CarNumber: null, UseCarNumbers: true });
   });
 
   it('adds a weekday that had no default', () => {

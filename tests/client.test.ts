@@ -10,7 +10,6 @@ function stubAuth(overrides: Partial<{ bearerToken: string | null; cookieHeader:
   // these tests exist to cover — so check for the key instead.
   vi.spyOn(auth, 'ensure').mockResolvedValue({
     bearerToken: 'bearerToken' in overrides ? (overrides.bearerToken ?? null) : 'jwt-abc',
-    refreshToken: null,
     cookieHeader: 'cookieHeader' in overrides ? (overrides.cookieHeader ?? '') : 'ss-id=abc',
   });
   return auth;
@@ -19,6 +18,12 @@ function stubAuth(overrides: Partial<{ bearerToken: string | null; cookieHeader:
 function client(fetchImpl: ReturnType<typeof vi.fn>, authOverrides = {}) {
   return new PickUpPatrolClient({ auth: stubAuth(authOverrides), fetchImpl });
 }
+
+describe('account', () => {
+  it('reports the account the auth signs in as, for binding confirmations', () => {
+    expect(client(vi.fn()).account()).toBe('u');
+  });
+});
 
 describe('request shape', () => {
   it('puts GET args on the query string of the DTO url', async () => {
