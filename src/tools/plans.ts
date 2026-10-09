@@ -6,12 +6,15 @@ import {
   confirmWrite,
   McpToolError,
   minifiedResult,
+  UNTRUSTED_DESCRIPTION_SUFFIX,
+  untrustedResult,
 } from '@chrischall/mcp-utils';
 import { BASE_PATH } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
-import type { PlanUpdate, Transportation } from '../types.js';
+import type { ParentPlan, ParentPlanDay, PlanEdit, PlanUpdate, Transportation } from '../types.js';
+import { PUP_UNTRUSTED } from './untrusted.js';
 
 /**
  * The fields whose change proves a plan write actually landed.
@@ -100,34 +103,117 @@ export async function resolveTransportation(
   return match;
 }
 
+/** Shared `raw` flag for the plan reads: the untouched record, still fenced. */
+const rawParam = z
+  .boolean()
+  .optional()
+  .describe('Return the unprojected API records instead of the summary (still marked untrusted)');
+
+/**
+ * Project one student's entry of a `GetParentPlans` day to the fields a
+ * parent asks about. Anything else on the record — the midday objects,
+ * ids the SPA never shows — stays behind `raw`.
+ */
+export function summarizeParentPlan(plan: ParentPlan): Record<string, unknown> {
+  return {
+    studentId: plan.StudentId ?? null,
+    firstName: plan.FirstName ?? null,
+    schoolId: plan.SchoolId ?? null,
+    schoolName: plan.SchoolName ?? null,
+    transportationId: plan.TransportationId ?? null,
+    transportation: plan.TransportationName ?? null,
+    note: plan.Note ?? null,
+    earlyDismissalTime: plan.EarlyDismissalTime ?? null,
+    carNumber: plan.UseCarNumbers ? (plan.CarNumber ?? null) : null,
+    cutoffTime: plan.CutoffTime ?? null,
+    isDefault: plan.IsDefault ?? null,
+    allowPlans: plan.AllowPlans ?? null,
+    blockedReason: plan.BlockedReason ?? null,
+    default: {
+      transportationId: plan.DefaultTransportationId ?? null,
+      transportation: plan.DefaultTransportationName ?? null,
+      note: plan.DefaultNote ?? null,
+      earlyDismissalTime: plan.DefaultEarlyDismissalTime ?? null,
+      carNumber: plan.DefaultUseCarNumbers ? (plan.DefaultCarNumber ?? null) : null,
+    },
+  };
+}
+
+/** Project a `GetParentPlans` day: its date, weekday, and each student's plan. */
+export function summarizeParentPlanDay(day: ParentPlanDay): Record<string, unknown> {
+  const date = day.PlanDate ? day.PlanDate.slice(0, 10) : null;
+  return {
+    date,
+    weekday: date === null ? null : weekdayOf(date),
+    plans: (day.Plans ?? []).map(summarizeParentPlan),
+  };
+}
+
+/** Project a `GetPlanEdit` override for the date that was asked about. */
+export function summarizePlanEdit(date: string, studentId: number, plan: PlanEdit): Record<string, unknown> {
+  return {
+    date,
+    weekday: weekdayOf(date),
+    studentId: plan.StudentId ?? studentId,
+    firstName: plan.FirstName ?? null,
+    lastName: plan.LastName ?? null,
+    schoolId: plan.SchoolId ?? null,
+    schoolName: plan.SchoolName ?? null,
+    transportationId: plan.TransportationId ?? null,
+    transportation: plan.TransportationName ?? null,
+    note: plan.Note ?? null,
+    notePrivate: plan.IsNotePrivate ?? false,
+    earlyDismissalTime: plan.EarlyDismissalTime ?? null,
+    carNumber: plan.CarNumber ?? null,
+    locked: plan.IsLocked ?? false,
+    busRouteUrl: plan.BusRouteUrl ?? null,
+    validationErrors: plan.ValidationErrors ?? [],
+  };
+}
+
 export function registerPlanTools(server: McpServer, client: PickUpPatrolClient): void {
   server.registerTool(
     'pup_list_plans',
     {
       description:
-        'Day-by-day dismissal plans across a date range for every student on the account, as PickUp Patrol returns them.',
+        `Day-by-day dismissal plans across a date range for every student on the account: the option in force, its note, and the weekly default it overrides. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         start_date: z.string().describe('YYYY-MM-DD'),
         end_date: z.string().describe('YYYY-MM-DD'),
+        raw: rawParam,
       }),
     },
-    async ({ start_date, end_date }) =>
-      minifiedResult(await client.getParentPlans(start_date, end_date)),
+    async ({ start_date, end_date, raw }) => {
+      const days = await client.getParentPlans(start_date, end_date);
+      return untrustedResult(
+        { days: raw === true ? days : days.map(summarizeParentPlanDay) },
+        PUP_UNTRUSTED,
+      );
+    },
   );
 
   server.registerTool(
     'pup_get_plan',
     {
       description:
-        'The dismissal plan for one student on one date — the option in force, any note, the early-dismissal time, and whether the date is locked because the cutoff has passed.',
+        `The dismissal plan for one student on one date — the option in force, any note, the early-dismissal time, and whether the date is locked because the cutoff has passed. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         date: z.string().describe('YYYY-MM-DD'),
+        raw: rawParam,
       }),
     },
-    async ({ student_id, date }) => minifiedResult(await client.getPlanEdit(date, student_id)),
+    async ({ student_id, date, raw }) => {
+      const plan = await client.getPlanEdit(date, student_id);
+      // Nested under `plan`, not spread: the projection's own `note` would
+      // collide with the envelope's and be pushed down under `data`.
+      return untrustedResult(
+        { plan: raw === true ? plan : summarizePlanEdit(date, student_id, plan) },
+        PUP_UNTRUSTED,
+      );
+    },
   );
 
   server.registerTool(

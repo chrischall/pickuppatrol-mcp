@@ -109,7 +109,7 @@ account out through the support desk, not through a timer.
 | `GetChildren` | GET | — | `Student[]` (see below) |
 | `GetStudent` | GET | `StudentId`, `MergeTimeWithNote?` | `Student` |
 | `GetDefaultPlansReviewNeeded` | GET | — | `[{ StudentId, NeedsReview }]` |
-| `GetParentPlans` | GET | `StartDate`, `EndDate` | day-plan records for the range |
+| `GetParentPlans` | GET | `StartDate`, `EndDate` | `[{ PlanDate, Plans[] }]` — one entry per day; each `Plans[]` item carries `StudentId, FirstName, SchoolId, SchoolName, TransportationId, TransportationName, Note, EarlyDismissalTime, CarNumber, UseCarNumbers, CutoffTime, IsDefault, AllowPlans, BlockedReason, HasNotifyTime`, the `Default*` fields it overrides, and midday objects (`LateArrival`, `LeaveAndReturn`, `EarlyDismissal`). Field names read off the SPA's plans-day view, not a live capture |
 | `GetPlanEdit` | GET | `PlanDate`, `StudentId` | `{ PlanDate, StudentId, FirstName, LastName, SchoolId, TransportationId, Note, IsLocked, TransportationName, SchoolName, BusRouteUrl, ValidationErrors, EarlyDismissalTime, CarNumber, LimitedIds, IsNotePrivate }` — the date's **override**, not the effective plan (see below) |
 | `GetBoldedDates` | GET | `StartDate`, `EndDate` | `string[]` — dates with a non-default plan |
 | `GetInvalidPlanDates` | GET | `SchoolId` | `string[]` — non-school days (105 entries on the captured account) |
@@ -117,7 +117,7 @@ account out through the support desk, not through a timer.
 | `GetCarNumbers` | GET | `SchoolId` | `string[]` |
 | `GetSchool` | GET | `SchoolId` | `School` |
 | `GetSchoolNotifyTimes` | GET | `SchoolId` | `{ SchoolId, NotifyTime{Sunday…Saturday}, CutoffTime{Sunday…Saturday} }` |
-| `GetSchoolSettings` | GET | `SchoolId` | `{ General, SchoolId, Active, Welcome, CarTag, LateArrival, LeaveAndReturn, EarlyDismissal, UpdateFields }` |
+| `GetSchoolSettings` | GET | `SchoolId` | `{ General, SchoolId, Active, Welcome, CarTag, LateArrival, LeaveAndReturn, EarlyDismissal, UpdateFields }` — the SPA reads `General.AllowDefaultPlans` and `LateArrival` / `LeaveAndReturn` `.NoteRequired` / `.NoteHint` |
 | `GetMiddayPlan` | GET | `StudentId`, `PlanDate`, `TypeId?` | midday checkout/checkin record |
 | `GetParentHealthScreenAudits` | GET | `ScreenDate` | health-screen audits |
 | `GetTermsOfUse` | GET | — | current terms |

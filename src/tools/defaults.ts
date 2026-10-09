@@ -6,6 +6,8 @@ import {
   confirmWrite,
   McpToolError,
   minifiedResult,
+  UNTRUSTED_DESCRIPTION_SUFFIX,
+  untrustedResult,
 } from '@chrischall/mcp-utils';
 import { BASE_PATH } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
@@ -13,6 +15,7 @@ import { applyDefaultPlans, clearDefaultPlans } from '../plans.js';
 import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
 import { proofsMatch, resolveTransportation } from './plans.js';
+import { PUP_UNTRUSTED } from './untrusted.js';
 
 /**
  * Accept weekdays as names ("Monday") or ids (1 = Sunday … 7 = Saturday).
@@ -44,7 +47,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     'pup_get_default_plans',
     {
       description:
-        "A student's weekly default dismissal plan — how they normally leave school on each day of the week — and whether the defaults still need a parent review.",
+        `A student's weekly default dismissal plan — how they normally leave school on each day of the week — and whether the defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
@@ -55,7 +58,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         client.getStudent(student_id),
         client.getDefaultPlansReviewNeeded(),
       ]);
-      return minifiedResult({
+      return untrustedResult({
         studentId: student.StudentId,
         name: [student.FirstName, student.LastName].filter(Boolean).join(' '),
         schoolId: student.SchoolId,
@@ -65,7 +68,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         needsDefaultsReview:
           review.find((r) => r.StudentId === student_id)?.NeedsReview ?? false,
         defaultPlans: summarizeDefaultPlans(student.DefaultPlans),
-      });
+      }, PUP_UNTRUSTED);
     },
   );
 

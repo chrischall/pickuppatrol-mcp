@@ -1,8 +1,16 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { minifiedResult } from '@chrischall/mcp-utils';
+import { minifiedResult, UNTRUSTED_DESCRIPTION_SUFFIX, untrustedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
-import type { Transportation } from '../types.js';
+import { WEEKDAY_NAMES } from '../dates.js';
+import type {
+  School,
+  SchoolNoteSetting,
+  SchoolNotifyTimes,
+  SchoolSettings,
+  Transportation,
+} from '../types.js';
+import { PUP_UNTRUSTED } from './untrusted.js';
 
 /**
  * Project a transportation to its identity plus the rules that decide what a
@@ -23,12 +31,60 @@ export function summarizeTransportation(option: Transportation): Record<string, 
   };
 }
 
+/** Project a `GetSchool` record to the profile a parent needs. */
+export function summarizeSchool(school: School): Record<string, unknown> {
+  return {
+    schoolId: school.SchoolId,
+    name: school.Name ?? null,
+    active: school.IsActive ?? null,
+    timeZone: school.TimeZoneId ?? null,
+    helpPhone: school.HelpPhone ?? null,
+    helpEmail: school.HelpEmail ?? null,
+    busRouteUrl: school.BusRouteUrl ?? null,
+    allowPlans: school.AllowPlans ?? null,
+    allowDefaultPlans: school.AllowDefaultPlans ?? null,
+  };
+}
+
+/**
+ * Turn `GetSchoolNotifyTimes`' fourteen `NotifyTime<Day>` / `CutoffTime<Day>`
+ * fields into one row per weekday, Sunday first. A day with no notify time is
+ * not a school day (docs/PICKUPPATROL-API.md).
+ */
+export function summarizeNotifyTimes(times: SchoolNotifyTimes): Array<Record<string, unknown>> {
+  return WEEKDAY_NAMES.map((weekday) => {
+    const notifyTime = (times[`NotifyTime${weekday}`] as string | null | undefined) ?? null;
+    const cutoffTime = (times[`CutoffTime${weekday}`] as string | null | undefined) ?? null;
+    return { weekday, schoolDay: notifyTime !== null, notifyTime, cutoffTime };
+  });
+}
+
+function summarizeNoteSetting(setting: SchoolNoteSetting | null | undefined): Record<string, unknown> {
+  return {
+    noteRequired: setting?.NoteRequired ?? false,
+    noteHint: setting?.NoteHint ?? null,
+  };
+}
+
+/**
+ * Project `GetSchoolSettings` to the fields the parents' SPA is seen reading:
+ * whether default plans are allowed, and the note rules for a late arrival and
+ * a leave-and-return. Free-text blocks (e.g. `Welcome`) stay behind `raw`.
+ */
+export function summarizeSchoolSettings(settings: SchoolSettings): Record<string, unknown> {
+  return {
+    allowDefaultPlans: settings.General?.AllowDefaultPlans ?? null,
+    lateArrival: summarizeNoteSetting(settings.LateArrival),
+    leaveAndReturn: summarizeNoteSetting(settings.LeaveAndReturn),
+  };
+}
+
 export function registerSchoolTools(server: McpServer, client: PickUpPatrolClient): void {
   server.registerTool(
     'pup_list_transportations',
     {
       description:
-        'The dismissal options a school offers (bus, car pickup, walker, absent …) with the rules each one imposes: whether a note is required, whether it takes a car number, whether it is an early dismissal, and the daily cutoff time. Read this before setting a plan.',
+        `The dismissal options a school offers (bus, car pickup, walker, absent …) with the rules each one imposes: whether a note is required, whether it takes a car number, whether it is an early dismissal, and the daily cutoff time. Read this before setting a plan. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
@@ -41,7 +97,7 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     async ({ school_id, include_inactive }) => {
       const options = await client.getTransportations(school_id);
       const visible = include_inactive === true ? options : options.filter((o) => o.IsActive !== false);
-      return minifiedResult(visible.map(summarizeTransportation));
+      return untrustedResult({ options: visible.map(summarizeTransportation) }, PUP_UNTRUSTED);
     },
   );
 
@@ -49,19 +105,31 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
     'pup_get_school',
     {
       description:
-        'A school profile together with its per-weekday notify times and plan cutoff times, and the settings that decide whether parents may set plans at all.',
+        `A school profile together with its per-weekday notify times and plan cutoff times, and the settings that decide whether parents may set plans at all. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
+        raw: z
+          .boolean()
+          .optional()
+          .describe('Return the unprojected API records instead of the summary (still marked untrusted)'),
       }),
     },
-    async ({ school_id }) => {
+    async ({ school_id, raw }) => {
       const [school, notifyTimes, settings] = await Promise.all([
         client.getSchool(school_id),
         client.getSchoolNotifyTimes(school_id),
         client.getSchoolSettings(school_id),
       ]);
-      return minifiedResult({ school, notifyTimes, settings });
+      if (raw === true) return untrustedResult({ school, notifyTimes, settings }, PUP_UNTRUSTED);
+      return untrustedResult(
+        {
+          school: summarizeSchool(school),
+          weekdays: summarizeNotifyTimes(notifyTimes),
+          settings: summarizeSchoolSettings(settings),
+        },
+        PUP_UNTRUSTED,
+      );
     },
   );
 

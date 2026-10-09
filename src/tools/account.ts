@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { minifiedResult } from '@chrischall/mcp-utils';
+import { minifiedResult, UNTRUSTED_DESCRIPTION_SUFFIX, untrustedResult } from '@chrischall/mcp-utils';
 import { runCredentialHealthcheck } from '@chrischall/mcp-utils/healthcheck';
 import { SignInRejectedError, UnusableSessionError } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { dayIdToName } from '../dates.js';
 import type { DefaultPlan, SessionResponse, Student } from '../types.js';
 import { VERSION } from '../version.js';
+import { PUP_UNTRUSTED } from './untrusted.js';
 
 /** Project a student down to the fields a parent actually asks about. */
 export function summarizeStudent(student: Student): Record<string, unknown> {
@@ -64,7 +65,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     'pup_list_students',
     {
       description:
-        'Every student on the account, each with their weekly default dismissal plan and whether those defaults still need a parent review.',
+        `Every student on the account, each with their weekly default dismissal plan and whether those defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -73,11 +74,14 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
         client.getDefaultPlansReviewNeeded(),
       ]);
       const needsReview = new Map(review.map((r) => [r.StudentId, r.NeedsReview]));
-      return minifiedResult(
-        students.map((student) => ({
-          ...summarizeStudent(student),
-          needsDefaultsReview: needsReview.get(student.StudentId) ?? false,
-        })),
+      return untrustedResult(
+        {
+          students: students.map((student) => ({
+            ...summarizeStudent(student),
+            needsDefaultsReview: needsReview.get(student.StudentId) ?? false,
+          })),
+        },
+        PUP_UNTRUSTED,
       );
     },
   );
@@ -86,7 +90,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     'pup_get_student',
     {
       description:
-        'One student in full, including the default dismissal plan for each weekday. Pass raw: true for the untouched API record.',
+        `One student in full, including the default dismissal plan for each weekday. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
@@ -98,7 +102,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     },
     async ({ student_id, raw }) => {
       const student = await client.getStudent(student_id);
-      return minifiedResult(raw === true ? student : summarizeStudent(student));
+      return untrustedResult(raw === true ? student : summarizeStudent(student), PUP_UNTRUSTED);
     },
   );
 
