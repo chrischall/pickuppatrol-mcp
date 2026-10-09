@@ -48,7 +48,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
     {
       description:
         `A student's weekly default dismissal plan — how they normally leave school on each day of the week — and whether the defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
       }),

@@ -47,9 +47,13 @@ describe('env sync', () => {
     expect(undocumented).toEqual([]);
   });
 
-  it('marks the credentials required and the password secret', () => {
-    expect(declared.get('PICKUPPATROL_USERNAME')?.isRequired).toBe(true);
-    expect(declared.get('PICKUPPATROL_PASSWORD')).toMatchObject({ isRequired: true, isSecret: true });
+  // The server boots without credentials (the config error is deferred to
+  // request time so the host's install-time tools/list probe still answers),
+  // so the listings must not force an install to invent a value — matching
+  // manifest.json's user_config, which already marks both optional.
+  it('marks the credentials optional and the password secret', () => {
+    expect(declared.get('PICKUPPATROL_USERNAME')?.isRequired).toBe(false);
+    expect(declared.get('PICKUPPATROL_PASSWORD')).toMatchObject({ isRequired: false, isSecret: true });
   });
 
   it('advertises in .env.example only variables the server reads', () => {

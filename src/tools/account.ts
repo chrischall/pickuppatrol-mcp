@@ -45,7 +45,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     {
       description:
         'The signed-in PickUp Patrol parent account: name, email, last sign-in, and the students linked to it. Start here to discover student and school ids.',
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       const session = await client.getSession();
@@ -66,7 +66,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     {
       description:
         `Every student on the account, each with their weekly default dismissal plan and whether those defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       const [students, review] = await Promise.all([
@@ -91,7 +91,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     {
       description:
         `One student in full, including the default dismissal plan for each weekday. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         raw: z
@@ -111,7 +111,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
     {
       description:
         "Verify the configured credentials sign in and the PickUp Patrol API answers. Reports the server version, the students the account can see, and — when it fails — an error.kind saying which hop broke: no_credential (nothing configured), credential_rejected (PickUp Patrol refused the username/password), verification_pending (a two-factor account), edge_blocked (a CDN/WAF refused the request before PickUp Patrol saw it, so the credentials were never judged), timeout, transport or http. Read-only; never returns the credentials.",
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
       let session: SessionResponse | undefined;
