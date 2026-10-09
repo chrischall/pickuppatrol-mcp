@@ -60,6 +60,14 @@ and only reports the configuration error on the first tool call.
 | `pup_list_car_numbers` | Car numbers the school issued to this account |
 | `pup_healthcheck` | Credentials sign in and the API answers; on failure, `error.kind` says which hop broke (`edge_blocked`, `credential_rejected`, …) |
 
+Reads are projected to known fields. Plan notes can be written by any guardian
+on the account, and option hints and school settings by school staff, so every
+read that carries them is marked `untrusted_content` with a note telling the
+model to treat the text as data, not instructions. `pup_list_plans`,
+`pup_get_plan`, `pup_get_school` and `pup_get_student` take `raw: true` for the
+untouched API record (still marked untrusted) — the only way to see fields such
+as `SASId` or `SafetyFlag`.
+
 **Writes** — every one asks you to confirm first. A client that can show a
 confirmation prompt (Claude Code) shows one, unless `MCP_CONFIRM_ELICITATION=off`.
 Otherwise the first call makes no

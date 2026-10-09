@@ -41,9 +41,9 @@ describe('pup_list_students', () => {
   it('summarises each student and folds in the review flag', async () => {
     const client = makeClient();
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    );
+    ).students;
     expect(result[0]).toMatchObject({
       studentId: STUDENT_ID,
       firstName: 'Lucas',
@@ -68,9 +68,9 @@ describe('pup_list_students', () => {
     const { vi } = await import('vitest');
     const client = makeClient({ getDefaultPlansReviewNeeded: vi.fn().mockResolvedValue([]) });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    );
+    ).students;
     expect(result[0]?.['needsDefaultsReview']).toBe(false);
     await h.close();
   });
@@ -88,9 +88,9 @@ describe('pup_list_students', () => {
       ]),
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    );
+    ).students;
     const plans = result[0]?.['defaultPlans'] as Array<Record<string, unknown>>;
     expect(plans.map((p) => p['weekday'])).toEqual(['Sunday', 'Friday']);
     await h.close();
@@ -110,7 +110,7 @@ describe('pup_list_students', () => {
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
     const plans = (
-      parseToolResult<Array<Record<string, unknown>>>(await h.callTool('pup_list_students'))[0]?.[
+      parseToolResult<{ students: Array<Record<string, unknown>> }>(await h.callTool('pup_list_students')).students[0]?.[
         'defaultPlans'
       ] as Array<Record<string, unknown>>
     ).map((p) => p['carNumber']);
@@ -124,9 +124,9 @@ describe('pup_list_students', () => {
       getChildren: vi.fn().mockResolvedValue([makeStudent({ DefaultPlans: null })]),
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    );
+    ).students;
     expect(result[0]?.['defaultPlans']).toEqual([]);
     await h.close();
   });
@@ -191,9 +191,9 @@ describe('school tools', () => {
   it('lists active dismissal options with the rules each imposes', async () => {
     const client = makeClient();
     const h = await createTestHarness((s) => registerSchoolTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ options: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_transportations', { school_id: SCHOOL_ID }),
-    );
+    ).options;
     expect(result.map((o) => o['name'])).toEqual(['PickUp', 'Bus', 'Early dismissal']);
     expect(result[0]).toMatchObject({
       transportationId: 41246,
@@ -208,12 +208,12 @@ describe('school tools', () => {
   it('includes deactivated options on request', async () => {
     const client = makeClient();
     const h = await createTestHarness((s) => registerSchoolTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ options: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_transportations', {
         school_id: SCHOOL_ID,
         include_inactive: true,
       }),
-    );
+    ).options;
     expect(result).toHaveLength(4);
     await h.close();
   });
@@ -225,7 +225,7 @@ describe('school tools', () => {
       await h.callTool('pup_get_school', { school_id: SCHOOL_ID }),
     );
     expect(result).toHaveProperty('school');
-    expect(result).toHaveProperty('notifyTimes');
+    expect(result).toHaveProperty('weekdays');
     expect(result).toHaveProperty('settings');
     await h.close();
   });
@@ -288,7 +288,7 @@ describe('plan reads', () => {
     const result = parseToolResult<Record<string, unknown>>(
       await h.callTool('pup_get_plan', { student_id: STUDENT_ID, date: '2026-08-17' }),
     );
-    expect(result['TransportationName']).toBe('Bus');
+    expect((result['plan'] as Record<string, unknown>)['transportation']).toBe('Bus');
     await h.close();
   });
 });

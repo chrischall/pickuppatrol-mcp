@@ -70,9 +70,9 @@ describe('missing-field fallbacks', () => {
         .mockResolvedValue([makeStudent({ DefaultPlans: [{ DayId: 2, UseCarNumbers: true }] })]),
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const plans = parseToolResult<Array<Record<string, unknown>>>(
+    const plans = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    )[0]?.['defaultPlans'] as Array<Record<string, unknown>>;
+    ).students[0]?.['defaultPlans'] as Array<Record<string, unknown>>;
     expect(plans[0]?.['carNumber']).toBeNull();
     await h.close();
   });
@@ -82,9 +82,9 @@ describe('missing-field fallbacks', () => {
       getChildren: vi.fn().mockResolvedValue([{ StudentId: 1, SchoolId: 2 }]),
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    );
+    ).students;
     expect(result[0]).toMatchObject({
       studentId: 1,
       allowPlans: null,
@@ -102,9 +102,9 @@ describe('missing-field fallbacks', () => {
       ]),
     });
     const h = await createTestHarness((s) => registerAccountTools(s, client));
-    const plans = parseToolResult<Array<Record<string, unknown>>>(
+    const plans = parseToolResult<{ students: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_students'),
-    )[0]?.['defaultPlans'] as Array<Record<string, unknown>>;
+    ).students[0]?.['defaultPlans'] as Array<Record<string, unknown>>;
     expect(plans[0]).toMatchObject({
       weekday: null,
       transportationId: null,
@@ -122,9 +122,9 @@ describe('missing-field fallbacks', () => {
         .mockResolvedValue([{ TransportationId: 1, SchoolId: SCHOOL_ID, Name: 'Walker' }]),
     });
     const h = await createTestHarness((s) => registerSchoolTools(s, client));
-    const result = parseToolResult<Array<Record<string, unknown>>>(
+    const result = parseToolResult<{ options: Array<Record<string, unknown>> }>(
       await h.callTool('pup_list_transportations', { school_id: SCHOOL_ID }),
-    );
+    ).options;
     expect(result[0]).toEqual({
       transportationId: 1,
       name: 'Walker',

@@ -144,6 +144,57 @@ export interface SchoolNotifyTimes {
   [key: string]: unknown;
 }
 
+/**
+ * One student's entry in a `GetParentPlans` day. Field names read off the
+ * SPA's plans-day view, which renders these records; the midday objects
+ * (`LateArrival`, `LeaveAndReturn`, `EarlyDismissal`) are left to `raw`.
+ */
+export interface ParentPlan {
+  StudentId?: number;
+  FirstName?: string | null;
+  SchoolId?: number;
+  SchoolName?: string | null;
+  TransportationId?: number | null;
+  TransportationName?: string | null;
+  Note?: string | null;
+  EarlyDismissalTime?: string | null;
+  CarNumber?: string | null;
+  UseCarNumbers?: boolean;
+  CutoffTime?: string | null;
+  IsDefault?: boolean;
+  AllowPlans?: boolean;
+  BlockedReason?: string | null;
+  DefaultTransportationId?: number | null;
+  DefaultTransportationName?: string | null;
+  DefaultNote?: string | null;
+  DefaultEarlyDismissalTime?: string | null;
+  DefaultCarNumber?: string | null;
+  DefaultUseCarNumbers?: boolean;
+  [key: string]: unknown;
+}
+
+/** One day of `GetParentPlans`: every student's plan for that date. */
+export interface ParentPlanDay {
+  PlanDate?: string | null;
+  Plans?: ParentPlan[] | null;
+}
+
+/** The note rules a school sets for one kind of midday change. */
+export interface SchoolNoteSetting {
+  NoteRequired?: boolean;
+  NoteHint?: string | null;
+  [key: string]: unknown;
+}
+
+/** `GetSchoolSettings` — only the fields the SPA is seen reading are typed. */
+export interface SchoolSettings {
+  SchoolId?: number;
+  General?: { AllowDefaultPlans?: boolean; [key: string]: unknown } | null;
+  LateArrival?: SchoolNoteSetting | null;
+  LeaveAndReturn?: SchoolNoteSetting | null;
+  [key: string]: unknown;
+}
+
 export interface DefaultsReviewNeeded {
   StudentId: number;
   NeedsReview: boolean;

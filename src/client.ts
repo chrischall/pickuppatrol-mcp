@@ -18,10 +18,12 @@ import {
 import type { AuthOptions, FetchLike, PupSession } from './auth.js';
 import type {
   DefaultsReviewNeeded,
+  ParentPlanDay,
   PlanEdit,
   PlanUpdate,
   School,
   SchoolNotifyTimes,
+  SchoolSettings,
   SessionResponse,
   Student,
   Transportation,
@@ -171,8 +173,8 @@ export class PickUpPatrolClient {
     return this.call<DefaultsReviewNeeded[]>('GET', 'GetDefaultPlansReviewNeeded');
   }
 
-  getParentPlans(startDate: string, endDate: string): Promise<unknown[]> {
-    return this.call<unknown[]>('GET', 'GetParentPlans', {
+  getParentPlans(startDate: string, endDate: string): Promise<ParentPlanDay[]> {
+    return this.call<ParentPlanDay[]>('GET', 'GetParentPlans', {
       StartDate: startDate,
       EndDate: endDate,
     });
@@ -201,8 +203,8 @@ export class PickUpPatrolClient {
     return this.call<SchoolNotifyTimes>('GET', 'GetSchoolNotifyTimes', { SchoolId: schoolId });
   }
 
-  getSchoolSettings(schoolId: number): Promise<Record<string, unknown>> {
-    return this.call<Record<string, unknown>>('GET', 'GetSchoolSettings', { SchoolId: schoolId });
+  getSchoolSettings(schoolId: number): Promise<SchoolSettings> {
+    return this.call<SchoolSettings>('GET', 'GetSchoolSettings', { SchoolId: schoolId });
   }
 
   getInvalidPlanDates(schoolId: number): Promise<string[]> {
