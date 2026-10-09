@@ -64,7 +64,16 @@ describe('PickUpPatrolAuth', () => {
     );
     const session = await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
     expect(session.bearerToken).toBe('jwt-abc');
-    expect(session).not.toHaveProperty('refreshToken');
+    // Deprecated but still populated: PupSession is public library surface
+    // (re-exported from src/lib.ts), so dropping the field is a breaking
+    // change reserved for a major release.
+    expect(session.refreshToken).toBe('refresh-xyz');
+  });
+
+  it('reports a null refresh token when the login returns none', async () => {
+    const fetchImpl = mockFetch(() => jsonResponse({ BearerToken: 'jwt-abc' }));
+    const session = await new PickUpPatrolAuth({ ...CREDS, fetchImpl }).ensure();
+    expect(session.refreshToken).toBeNull();
   });
 
   // The live deployment authenticates by session cookie: the SPA reads a
