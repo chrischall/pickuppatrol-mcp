@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.0...v1.2.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* annotate tools truthfully and sync manifests with the served tools ([#90](https://github.com/chrischall/pickuppatrol-mcp/issues/90)) ([770bbe5](https://github.com/chrischall/pickuppatrol-mcp/commit/770bbe51f15fc5e29831cacfe331ff8bb067b41b))
+* declare the plugin MCP config under the mcpServers key Claude Code reads ([#91](https://github.com/chrischall/pickuppatrol-mcp/issues/91)) ([8549fe8](https://github.com/chrischall/pickuppatrol-mcp/commit/8549fe8b811ae98e5b4d7e0602cd9bb3283f126b))
+* **deps:** Bump source-map-js from 1.2.1 to 1.2.2 in the security group across 1 directory ([#89](https://github.com/chrischall/pickuppatrol-mcp/issues/89)) ([6f34aa7](https://github.com/chrischall/pickuppatrol-mcp/commit/6f34aa79035d3f5d4210917425e3edaee749ef8d))
+* **deps:** update @chrischall/mcp-utils to 3.0.0 ([#88](https://github.com/chrischall/pickuppatrol-mcp/issues/88)) ([6582d1f](https://github.com/chrischall/pickuppatrol-mcp/commit/6582d1feb14efa254cdce07b2ca47b2ea25577ff))
+* **lib:** restore PupSession.refreshToken as deprecated to keep the library API compatible ([#85](https://github.com/chrischall/pickuppatrol-mcp/issues/85)) ([e3b8c5b](https://github.com/chrischall/pickuppatrol-mcp/commit/e3b8c5b219bbdd4d6f758d522c6c7815bd8df7dc))
+* resolve low-severity audit findings ([#82](https://github.com/chrischall/pickuppatrol-mcp/issues/82)) ([64c273d](https://github.com/chrischall/pickuppatrol-mcp/commit/64c273df43fe32580f1eee848986c7e49e0939f1))
+* **security:** project plan and school reads and mark their notes as untrusted ([#86](https://github.com/chrischall/pickuppatrol-mcp/issues/86)) ([7d939aa](https://github.com/chrischall/pickuppatrol-mcp/commit/7d939aa2a4da24fa5581aca6162e58508c0be1df))
+
 ## [1.2.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.1.4...v1.2.0) (2026-10-07)
 
 
