@@ -464,6 +464,70 @@ describe('pup_set_default_plans', () => {
     await h.close();
   });
 
+  it('sets a car number on a weekday default and verifies it landed', async () => {
+    const CAR_LINE = {
+      TransportationId: 41249,
+      SchoolId: SCHOOL_ID,
+      Name: 'Car line',
+      IsActive: true,
+      UseCarNumbers: true,
+    };
+    const landed = (carNumber: string) =>
+      makeStudent({
+        DefaultPlans: [
+          { DayId: 3, TransportationId: CAR_LINE.TransportationId, CarNumber: carNumber, UseCarNumbers: true },
+        ],
+      });
+    for (const [readBack, verified] of [['47', true], ['12', false]] as const) {
+      const client = makeClientWithStudentWrite(makeStudent(), landed(readBack), {
+        getTransportations: vi.fn().mockResolvedValue([CAR_LINE]),
+      });
+      const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
+      const result = parseToolResult<Record<string, unknown>>(
+        await h.callTool('pup_set_default_plans', {
+          student_id: STUDENT_ID,
+          days: ['Tuesday'],
+          transportation_id: CAR_LINE.TransportationId,
+          car_number: '47',
+        }),
+      );
+      const sent = (client.updateStudent as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as { DefaultPlans: Array<Record<string, unknown>> };
+      expect(sent.DefaultPlans.find((p) => p['DayId'] === 3)).toMatchObject({
+        CarNumber: '47',
+        UseCarNumbers: true,
+      });
+      expect(result['verified']).toBe(verified);
+      await h.close();
+    }
+  });
+
+  it('drops a car number sent for an option that does not use them, and expects none back', async () => {
+    const client = makeClientWithStudentWrite(
+      makeStudent(),
+      makeStudent({
+        DefaultPlans: [{ DayId: 3, TransportationId: BUS.TransportationId, CarNumber: null }],
+      }),
+    );
+    const h = await createTestHarness((s) => registerDefaultPlanTools(s, client), ACCEPT);
+    const result = parseToolResult<Record<string, unknown>>(
+      await h.callTool('pup_set_default_plans', {
+        student_id: STUDENT_ID,
+        days: ['Tuesday'],
+        transportation_id: BUS.TransportationId,
+        car_number: '47',
+      }),
+    );
+    const sent = (client.updateStudent as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { DefaultPlans: Array<Record<string, unknown>> };
+    expect(sent.DefaultPlans.find((p) => p['DayId'] === 3)).toMatchObject({
+      CarNumber: null,
+      UseCarNumbers: false,
+    });
+    expect(result['verified']).toBe(true);
+    await h.close();
+  });
+
   it('catches a default whose note did not change, though the option matches', async () => {
     const client = makeClientWithStudentWrite(
       makeStudent(),

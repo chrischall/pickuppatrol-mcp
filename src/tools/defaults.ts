@@ -91,6 +91,10 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
           .string()
           .optional()
           .describe('HH:MM, required when the option is an early dismissal'),
+        car_number: z
+          .string()
+          .optional()
+          .describe("Car number, for options where usesCarNumbers is true; omit to keep the weekday's current number"),
         clear_all: z
           .boolean()
           .optional()
@@ -98,7 +102,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         confirmToken: confirmTokenParam,
       }),
     },
-    (async ({ student_id, days, transportation_id, note, early_dismissal_time, clear_all, confirmToken }, ctx) => {
+    (async ({ student_id, days, transportation_id, note, early_dismissal_time, car_number, clear_all, confirmToken }, ctx) => {
       // Read-modify-write: PickUp Patrol has no default-plans endpoint, so the
       // whole student record round-trips. Reading it here (before the confirm
       // gate, on every call) is what makes the preview show the real payload;
@@ -153,6 +157,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
         transportation,
         note,
         earlyDismissalTime: early_dismissal_time,
+        carNumber: car_number,
       });
 
       const dayNames = dayIds.map((id) => dayIdToName(id)).join(', ');
@@ -196,11 +201,15 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
             transportationId: plan.TransportationId ?? null,
             note: plan.Note ?? null,
             earlyDismissalTime: plan.EarlyDismissalTime ?? null,
+            carNumber: plan.CarNumber ?? null,
           },
           {
             transportationId: transportation.TransportationId,
             note: sent?.Note ?? null,
             earlyDismissalTime: sent?.EarlyDismissalTime ?? undefined,
+            // A number the caller sent is part of the proof: a number-only
+            // change keeps the option and note identical.
+            carNumber: car_number !== undefined ? (sent?.CarNumber ?? null) : undefined,
           },
         );
       });

@@ -159,6 +159,7 @@ export interface DefaultPlanInput {
   transportation: Transportation;
   note?: string | undefined;
   earlyDismissalTime?: string | undefined;
+  carNumber?: string | undefined;
 }
 
 /**
@@ -186,15 +187,24 @@ export function applyDefaultPlans(input: DefaultPlanInput): Student {
   assertTransportationAllowed(student, transportation);
   const note = normalizeNote(transportation, input.note);
   const earlyDismissalTime = normalizeEarlyDismissal(transportation, input.earlyDismissalTime);
+  const usesCarNumbers = transportation.UseCarNumbers === true;
+  const carNumber = normalizeCarNumber(transportation, input.carNumber);
 
   const plans: DefaultPlan[] = [...(student.DefaultPlans ?? [])].map((plan) => ({ ...plan }));
   for (const dayId of new Set(dayIds)) {
     const existing = plans.find((plan) => plan.DayId === dayId);
+    // The car-number pair always follows the NEW option: the whole record is
+    // PUT back, so a car-rider day switched to the bus must not keep its old
+    // number. On a car-number option with no number given, the day's existing
+    // number (if it already used one) is kept rather than wiped.
+    const keptCarNumber = existing?.UseCarNumbers === true ? (existing.CarNumber ?? null) : null;
     const fields = {
       TransportationId: transportation.TransportationId,
       TransportationName: transportation.Name,
       Note: note,
       EarlyDismissalTime: earlyDismissalTime,
+      CarNumber: usesCarNumbers ? (carNumber ?? keptCarNumber) : null,
+      UseCarNumbers: usesCarNumbers,
     };
     if (existing) {
       Object.assign(existing, fields);
