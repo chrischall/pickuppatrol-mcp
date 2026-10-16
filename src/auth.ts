@@ -4,6 +4,7 @@ import {
   CookieJar,
   EdgeBlockedError,
   detectEdgeBlock,
+  withAmbientCancellation,
 } from '@chrischall/mcp-utils';
 import type { AuthenticateResponse, ResponseStatus } from './types.js';
 
@@ -276,7 +277,10 @@ export class PickUpPatrolAuth {
     // sign-in would otherwise stall every tool — the healthcheck included —
     // for as long as undici's own ~300s default. The signal also covers the
     // body read below.
-    const signal = AbortSignal.timeout(this.timeoutMs);
+    // The running call's cancellation is folded in too, so a cancelled call
+    // does not leave the shared sign-in running for the full deadline.
+    const deadline = AbortSignal.timeout(this.timeoutMs);
+    const signal = withAmbientCancellation(deadline)!;
     let res: Response;
     let text: string;
     try {
@@ -299,7 +303,7 @@ export class PickUpPatrolAuth {
     } catch (err) {
       // Transient: a timeout says nothing about the credentials, so it is
       // never cached as permanentError and the next call signs in afresh.
-      if (signal.aborted) {
+      if (deadline.aborted) {
         throw new McpToolError(
           `PickUp Patrol did not answer the sign-in within ${this.timeoutMs / 1000}s`,
           { hint: 'The service may be slow or down. Try again shortly.' },

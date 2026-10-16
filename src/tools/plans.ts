@@ -4,6 +4,7 @@ import {
   CONFIRM_FLOW_SENTENCE,
   confirmTokenParam,
   confirmWrite,
+  IsoDate,
   McpToolError,
   minifiedResult,
   UNTRUSTED_DESCRIPTION_SUFFIX,
@@ -179,8 +180,8 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
         `Day-by-day dismissal plans across a date range for every student on the account: the option in force, its note, and the weekly default it overrides. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
-        start_date: z.string().describe('YYYY-MM-DD'),
-        end_date: z.string().describe('YYYY-MM-DD'),
+        start_date: IsoDate.describe('YYYY-MM-DD'),
+        end_date: IsoDate.describe('YYYY-MM-DD'),
         raw: rawParam,
       }),
     },
@@ -201,7 +202,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
-        date: z.string().describe('YYYY-MM-DD'),
+        date: IsoDate.describe('YYYY-MM-DD'),
         raw: rawParam,
       }),
     },

@@ -6,6 +6,7 @@ import {
   buildQueryString,
   EdgeBlockedError,
   detectEdgeBlock,
+  withAmbientCancellation,
 } from '@chrischall/mcp-utils';
 import {
   PickUpPatrolAuth,
@@ -86,7 +87,9 @@ export class PickUpPatrolClient {
         method,
         headers: this.headers(session),
         body: method === 'GET' || args === undefined ? undefined : JSON.stringify(args),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        // Deadline plus the running call's cancellation: a call the client gave
+        // up on (e.g. a multi-date verify loop) stops issuing requests.
+        signal: withAmbientCancellation(AbortSignal.timeout(REQUEST_TIMEOUT_MS)),
       }),
     );
 

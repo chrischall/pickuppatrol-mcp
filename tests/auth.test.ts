@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { McpToolError } from '@chrischall/mcp-utils';
+import { withCallSignal, type McpToolError } from '@chrischall/mcp-utils';
 import {
   PickUpPatrolAuth,
   UNUSABLE_SESSION_COOLDOWN_MS,
@@ -182,6 +182,25 @@ describe('PickUpPatrolAuth', () => {
     hung.mockImplementationOnce(async () => jsonResponse({ BearerToken: 'jwt-abc' }));
     await expect(auth.ensure()).resolves.toMatchObject({ bearerToken: 'jwt-abc' });
     expect(hung).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops a sign-in the tool call cancelled, reports the cancellation (not a timeout), and stays retryable', async () => {
+    const hung = vi.fn().mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const auth = new PickUpPatrolAuth({ ...CREDS, fetchImpl: hung, timeoutMs: 1_000 });
+    const controller = new AbortController();
+    const pending = withCallSignal(controller.signal, () => auth.ensure());
+    setTimeout(() => controller.abort(), 5);
+    const err = (await pending.catch((e: unknown) => e)) as Error;
+    expect(err.name).toBe('AbortError');
+    expect(err.message).not.toMatch(/did not answer the sign-in/);
+
+    hung.mockImplementationOnce(async () => jsonResponse({ BearerToken: 'jwt-abc' }));
+    await expect(auth.ensure()).resolves.toMatchObject({ bearerToken: 'jwt-abc' });
   });
 
   // Headers arrive, then the body stalls: the same timeout has to cover it.
