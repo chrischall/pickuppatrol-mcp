@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTestHarness, parseToolResult } from '@chrischall/mcp-utils/test';
 import { registerAccountTools } from '../src/tools/account.js';
 import { registerSchoolTools } from '../src/tools/school.js';
@@ -269,6 +269,28 @@ describe('school tools', () => {
     expect(
       parseToolResult(await h.callTool('pup_list_car_numbers', { school_id: SCHOOL_ID })),
     ).toEqual(['12']);
+    await h.close();
+  });
+});
+
+describe('read-side dates are ISO dates', () => {
+  // A malformed or impossible date was forwarded upstream and could read as
+  // "no plans"; the schema now refuses it before any request.
+  it.each([
+    ['pup_list_plans', { start_date: '08/01/2026', end_date: '2026-08-31' }, 'getParentPlans'],
+    ['pup_list_plans', { start_date: '2026-08-01', end_date: '2026-13-01' }, 'getParentPlans'],
+    ['pup_get_plan', { student_id: STUDENT_ID, date: '2026-02-30' }, 'getPlanEdit'],
+    ['pup_list_non_school_days', { school_id: SCHOOL_ID, start_date: '2026-8-1', end_date: '2026-08-31' }, 'getInvalidPlanDates'],
+    ['pup_list_non_school_days', { school_id: SCHOOL_ID, start_date: '2026-08-01', end_date: 'tomorrow' }, 'getInvalidPlanDates'],
+  ] as const)('%s refuses %j', async (tool, args, method) => {
+    const client = makeClient();
+    const h = await createTestHarness((s) => {
+      registerPlanTools(s, client);
+      registerSchoolTools(s, client);
+    });
+    const res = await h.callTool(tool, args as Record<string, unknown>);
+    expect(res.isError).toBe(true);
+    expect((client as unknown as Record<string, ReturnType<typeof vi.fn>>)[method]).not.toHaveBeenCalled();
     await h.close();
   });
 });

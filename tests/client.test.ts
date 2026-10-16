@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { McpToolError } from '@chrischall/mcp-utils';
+import { withCallSignal, type McpToolError } from '@chrischall/mcp-utils';
 import { PickUpPatrolAuth } from '../src/auth.js';
 import { PickUpPatrolClient } from '../src/client.js';
 
@@ -216,4 +216,23 @@ describe('construction', () => {
     expect(fetchImpl.mock.calls[0]?.[0]).toContain('/Authenticate');
     expect(fetchImpl.mock.calls[1]?.[0]).toContain('/GetSession');
   });
+});
+
+describe('cancellation', () => {
+  it('aborts an upstream request when the tool call is cancelled', async () => {
+    let seen: AbortSignal | undefined;
+    const fetchImpl = vi.fn().mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          seen = init?.signal ?? undefined;
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const controller = new AbortController();
+    const pending = withCallSignal(controller.signal, () => client(fetchImpl).call('GET', 'GetParentPlans'));
+    setTimeout(() => controller.abort(), 5);
+    const err = (await pending.catch((e: unknown) => e)) as Error;
+    expect(seen?.aborted).toBe(true);
+    expect(err.name).toBe('AbortError');
+  }, 2_000);
 });

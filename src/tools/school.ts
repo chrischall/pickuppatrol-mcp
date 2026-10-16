@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { minifiedResult, UNTRUSTED_DESCRIPTION_SUFFIX, untrustedResult } from '@chrischall/mcp-utils';
+import { IsoDate, minifiedResult, UNTRUSTED_DESCRIPTION_SUFFIX, untrustedResult } from '@chrischall/mcp-utils';
 import type { PickUpPatrolClient } from '../client.js';
 import { WEEKDAY_NAMES } from '../dates.js';
 import type {
@@ -141,11 +141,10 @@ export function registerSchoolTools(server: McpServer, client: PickUpPatrolClien
       annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: z.object({
         school_id: z.number().int().describe('School id, from pup_list_students'),
-        start_date: z
-          .string()
+        start_date: IsoDate
           .optional()
           .describe('YYYY-MM-DD; with end_date, also return dates that differ from the default'),
-        end_date: z.string().optional().describe('YYYY-MM-DD'),
+        end_date: IsoDate.optional().describe('YYYY-MM-DD'),
       }),
     },
     async ({ school_id, start_date, end_date }) => {
