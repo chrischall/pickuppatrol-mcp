@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.1...v1.2.2) (2026-10-16)
+
+
+### Bug Fixes
+
+* **deps:** Bump the production-dependencies group with 2 updates ([#93](https://github.com/chrischall/pickuppatrol-mcp/issues/93)) ([09bf3d2](https://github.com/chrischall/pickuppatrol-mcp/commit/09bf3d24400a0dd9d262ab91a62be0eeb55d283f))
+* **tools:** reject malformed dates and stop upstream requests when a call is cancelled ([#95](https://github.com/chrischall/pickuppatrol-mcp/issues/95)) ([7c731fa](https://github.com/chrischall/pickuppatrol-mcp/commit/7c731fab943a93a14cd097fb59869bc2092d7ce4))
+
 ## [1.2.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.0...v1.2.1) (2026-10-09)
 
 
