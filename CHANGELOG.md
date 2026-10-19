@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.3](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.2...v1.2.3) (2026-10-19)
+
+
+### Bug Fixes
+
+* **deps:** Bump dotenv from 18.0.6 to 18.0.8 in the production-dependencies group ([#99](https://github.com/chrischall/pickuppatrol-mcp/issues/99)) ([a1d9ad4](https://github.com/chrischall/pickuppatrol-mcp/commit/a1d9ad484e82704fc1705e8b49f90749f14a09ab))
+
+
+### Documentation
+
+* **mint:** add sample prompts for the public catalog ([#102](https://github.com/chrischall/pickuppatrol-mcp/issues/102)) ([d7622bc](https://github.com/chrischall/pickuppatrol-mcp/commit/d7622bc4cbe84804b59d38597bcc7d9a698e793f))
+
 ## [1.2.2](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.1...v1.2.2) (2026-10-16)
 
 
