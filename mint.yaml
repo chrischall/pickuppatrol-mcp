@@ -20,3 +20,10 @@ egress:
     # Only hosts the SERVER process actually fetches. Hosts that appear
     # solely in a URL this server BUILDS and returns are excluded.
     - app.pickuppatrol.net
+examples:
+  - prompt: How are my kids getting home from school each day this week?
+    note: Reads the weekly default dismissal plans for every student.
+  - prompt: Are there any pickup changes scheduled for next week, and what's the cutoff for making one today?
+    note: Lists day-by-day plans and the school's plan cutoff times.
+  - prompt: Which school holidays or closures are coming up this month?
+    note: Lists non-school days for the student's school.
