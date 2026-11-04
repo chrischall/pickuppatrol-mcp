@@ -199,7 +199,8 @@ const BRIEF_UNTRUSTED_NOTE = `Dismissal option names below are set by school sta
  * at most 120 characters (the title is shortened). The title is the child and
  * the option in force; the status is `blocked` when the school blocks plans
  * for the day, else whether it is the weekly `default` or `changed` from it,
- * and `scheduled` when the record does not say.
+ * and `scheduled` when the record does not say. A title starting with `-- ` or
+ * `\` is escaped with one leading `\` so it can never read as a note.
  */
 export function briefPlanLine(date: string | null, plan: ParentPlan): string {
   const who = plan.FirstName?.trim() || `student ${plan.StudentId ?? '?'}`;
@@ -212,7 +213,10 @@ export function briefPlanLine(date: string | null, plan: ParentPlan): string {
         ? 'changed'
         : 'scheduled';
   const tail = ` — ${date ?? 'no date'} — ${status}`;
-  const title = `${who}: ${option}`;
+  // A title that would read as a note (`-- `) or that starts with `\` gets one
+  // leading `\` — the gateway strips exactly one from every item line.
+  const raw = `${who}: ${option}`;
+  const title = raw.startsWith('-- ') || raw.startsWith('\\') ? `\\${raw}` : raw;
   const room = BRIEF_LINE_MAX - tail.length;
   const shown = title.length > room ? `${title.slice(0, room - 1)}…` : title;
   return `${shown}${tail}`;

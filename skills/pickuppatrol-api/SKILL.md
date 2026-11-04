@@ -124,7 +124,8 @@ group (`_meta.mint` on every tool except `pup_healthcheck`).
   `<child>: <option> — <YYYY-MM-DD> — <default|changed|blocked|scheduled>`,
   inside the untrusted-data envelope (option names are school-authored; plan
   notes are left off), with `-- none` for an empty range and
-  `-- N of M shown` when capped.
+  `-- N of M shown` when capped. A title starting with `-- ` or `\` is
+  escaped with one leading `\` so it never reads as a note.
 - **No subject:** the read already covers every student on the account in one
   call, so it names no subject argument.
 - Nothing here answers *what's new* or *what's due*; the other reads are
