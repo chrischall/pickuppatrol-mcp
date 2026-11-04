@@ -112,3 +112,26 @@ on its own and would make every write look successful. The note matters: every
 option seen so far is `IsNoteRequired`, so a note-only edit is ordinary, and an
 id-only comparison would pass without observing it. After *clearing* a date,
 expect `null` — not the weekday default.
+
+## In context groups
+
+When `pickuppatrol-mcp` is hosted on mcp-host, its tools join the **school**
+group (`_meta.mint` on every tool except `pup_healthcheck`).
+
+- **Canonical read:** `pup_list_plans` answers *what's on* — how each child
+  leaves school on each day of a range (`when` = `start_date`/`end_date`).
+  `view: "brief"` answers one line per child per day,
+  `<child>: <option> — <YYYY-MM-DD> — <default|changed|blocked|scheduled>`,
+  inside the untrusted-data envelope (option names are school-authored; plan
+  notes are left off), with `-- none` for an empty range and
+  `-- N of M shown` when capped.
+- **No subject:** the read already covers every student on the account in one
+  call, so it names no subject argument.
+- Nothing here answers *what's new* or *what's due*; the other reads are
+  `lookup` hints and the three writes are `change` hints, still behind their
+  confirmation.
+- A compound ask looks like "what's on at school tomorrow — and how is
+  everyone getting home?": the group calls `pup_list_plans` for that day
+  beside the other school members.
+- Not browser-bridged: the server signs in server-side, so the group never
+  answers "needs your browser open" for it.
