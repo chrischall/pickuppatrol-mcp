@@ -16,6 +16,7 @@ import { dayIdToName, nameToDayId } from '../dates.js';
 import { summarizeDefaultPlans } from './account.js';
 import { proofsMatch, resolveTransportation } from './plans.js';
 import { PUP_UNTRUSTED } from './untrusted.js';
+import { schoolMeta } from './hints.js';
 
 /**
  * Accept weekdays as names ("Monday") or ids (1 = Sunday … 7 = Saturday).
@@ -49,6 +50,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       description:
         `A student's weekly default dismissal plan — how they normally leave school on each day of the week — and whether the defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('lookup', { aliases: ['usual pickup', 'weekly plan'] }),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
       }),
@@ -78,6 +80,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       description:
         `Change a student's weekly default dismissal plan for one or more weekdays, or clear every default. This is how the child leaves school on any date without a specific plan. ${CONFIRM_FLOW_SENTENCE} Read pup_list_transportations first.`,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      _meta: schoolMeta('change', { aliases: ['usual pickup', 'weekly plan'] }),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         days: z
@@ -238,6 +241,7 @@ export function registerDefaultPlanTools(server: McpServer, client: PickUpPatrol
       description:
         `Mark a student's default plans as reviewed, clearing the school's 'needs review' prompt. ${CONFIRM_FLOW_SENTENCE}`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      _meta: schoolMeta('change'),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         reviewed: z.boolean().optional().describe('Defaults to true'),

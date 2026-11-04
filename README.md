@@ -52,7 +52,7 @@ and only reports the configuration error on the first tool call.
 | `pup_list_students` | Every student with their weekly defaults and review flag |
 | `pup_get_student` | One student in full |
 | `pup_get_default_plans` | A student's weekly default plan, day by day |
-| `pup_list_plans` | Day-by-day plans across a date range |
+| `pup_list_plans` | Day-by-day plans across a date range (`view: "brief"` for one line per child per day) |
 | `pup_get_plan` | One student, one date — including whether it is locked |
 | `pup_list_transportations` | A school's dismissal options and the rules each imposes |
 | `pup_get_school` | School profile, notify times, cutoff times, settings |

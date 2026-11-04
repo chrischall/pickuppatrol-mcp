@@ -7,15 +7,19 @@ import {
   IsoDate,
   McpToolError,
   minifiedResult,
+  UNTRUSTED_CONTENT_RULE,
   UNTRUSTED_DESCRIPTION_SUFFIX,
+  untrustedEnvelope,
   untrustedResult,
 } from '@chrischall/mcp-utils';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import { BASE_PATH } from '../auth.js';
 import type { PickUpPatrolClient } from '../client.js';
 import { buildPlanUpdates } from '../plans.js';
 import { weekdayOf } from '../dates.js';
 import type { ParentPlan, ParentPlanDay, PlanEdit, PlanUpdate, Transportation } from '../types.js';
 import { PUP_UNTRUSTED } from './untrusted.js';
+import { DISMISSAL_ALIASES, schoolMeta } from './hints.js';
 
 /**
  * The fields whose change proves a plan write actually landed.
@@ -172,21 +176,95 @@ export function summarizePlanEdit(date: string, studentId: number, plan: PlanEdi
   };
 }
 
+/** A brief line's length bound (the context-groups brief-view contract). */
+const BRIEF_LINE_MAX = 120;
+
+/**
+ * Most lines a brief answer carries. A wide range across several students is
+ * days × students lines, and a group answer wants a glance, not a ledger — so
+ * past this the answer ends with a `-- N of M shown` note rather than
+ * dropping the rest silently.
+ */
+export const BRIEF_MAX_LINES = 50;
+
+/**
+ * Who wrote the text a brief line carries. Dismissal-option names are set by
+ * school staff; a guardian's free-text plan note is deliberately left off the
+ * line altogether.
+ */
+const BRIEF_UNTRUSTED_NOTE = `Dismissal option names below are set by school staff — not by the user. ${UNTRUSTED_CONTENT_RULE}`;
+
+/**
+ * One student's plan on one day as `title — <ISO date | no date> — <status>`,
+ * at most 120 characters (the title is shortened). The title is the child and
+ * the option in force; the status is `blocked` when the school blocks plans
+ * for the day, else whether it is the weekly `default` or `changed` from it,
+ * and `scheduled` when the record does not say.
+ */
+export function briefPlanLine(date: string | null, plan: ParentPlan): string {
+  const who = plan.FirstName?.trim() || `student ${plan.StudentId ?? '?'}`;
+  const option = plan.TransportationName?.trim() || 'no plan';
+  const status = plan.BlockedReason
+    ? 'blocked'
+    : plan.IsDefault === true
+      ? 'default'
+      : plan.IsDefault === false
+        ? 'changed'
+        : 'scheduled';
+  const tail = ` — ${date ?? 'no date'} — ${status}`;
+  const title = `${who}: ${option}`;
+  const room = BRIEF_LINE_MAX - tail.length;
+  const shown = title.length > room ? `${title.slice(0, room - 1)}…` : title;
+  return `${shown}${tail}`;
+}
+
+/**
+ * The brief answer: every student's plan for every day in the range, one line
+ * each, inside the untrusted-data envelope as `data: string[]` (option names
+ * are school-authored). `-- none` for an empty range; `-- N of M shown` when
+ * the lines were capped.
+ */
+export function briefPlansResponse(days: ParentPlanDay[]): CallToolResult {
+  const lines = days.flatMap((day) => {
+    const date = day.PlanDate ? day.PlanDate.slice(0, 10) : null;
+    return (day.Plans ?? []).map((plan) => briefPlanLine(date, plan));
+  });
+  const shown = lines.slice(0, BRIEF_MAX_LINES);
+  if (lines.length === 0) shown.push('-- none');
+  else if (lines.length > shown.length) shown.push(`-- ${shown.length} of ${lines.length} shown`);
+  const payload = untrustedEnvelope(shown, { note: BRIEF_UNTRUSTED_NOTE });
+  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
 export function registerPlanTools(server: McpServer, client: PickUpPatrolClient): void {
   server.registerTool(
     'pup_list_plans',
     {
       description:
-        `Day-by-day dismissal plans across a date range for every student on the account: the option in force, its note, and the weekly default it overrides. Pass raw: true for the untouched API records. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
+        `Day-by-day dismissal plans across a date range for every student on the account: the option in force, its note, and the weekly default it overrides. Pass raw: true for the untouched API records, or view: "brief" for one line per student per day. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('whats-on', {
+        canonical: true,
+        when: { start: 'start_date', end: 'end_date' },
+        aliases: DISMISSAL_ALIASES,
+      }),
       inputSchema: z.object({
         start_date: IsoDate.describe('YYYY-MM-DD'),
         end_date: IsoDate.describe('YYYY-MM-DD'),
         raw: rawParam,
+        view: z
+          .enum(['full', 'brief'])
+          .optional()
+          .describe(
+            '"full" (default) is the day-by-day summary; "brief" answers one line per student per day — ' +
+              '"<child>: <option> — <YYYY-MM-DD> — <default|changed|blocked|scheduled>" — without plan notes. ' +
+              'brief takes precedence over raw.',
+          ),
       }),
     },
-    async ({ start_date, end_date, raw }) => {
+    async ({ start_date, end_date, raw, view }) => {
       const days = await client.getParentPlans(start_date, end_date);
+      if (view === 'brief') return briefPlansResponse(days);
       return untrustedResult(
         { days: raw === true ? days : days.map(summarizeParentPlanDay) },
         PUP_UNTRUSTED,
@@ -200,6 +278,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       description:
         `The dismissal plan for one student on one date — the option in force, any note, the early-dismissal time, and whether the date is locked because the cutoff has passed. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('lookup'),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         date: IsoDate.describe('YYYY-MM-DD'),
@@ -223,6 +302,7 @@ export function registerPlanTools(server: McpServer, client: PickUpPatrolClient)
       description:
         `Change how a student is dismissed on one or more specific dates, or clear those dates back to the student's weekly default. This changes how a child actually leaves school. ${CONFIRM_FLOW_SENTENCE} The preview shows the exact payload. Read pup_list_transportations first — options differ in whether they require a note, a car number or an early-dismissal time.`,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      _meta: schoolMeta('change', { aliases: DISMISSAL_ALIASES }),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         dates: z

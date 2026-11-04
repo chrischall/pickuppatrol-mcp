@@ -8,6 +8,7 @@ import { dayIdToName } from '../dates.js';
 import type { DefaultPlan, SessionResponse, Student } from '../types.js';
 import { VERSION } from '../version.js';
 import { PUP_UNTRUSTED } from './untrusted.js';
+import { schoolMeta } from './hints.js';
 
 /** Project a student down to the fields a parent actually asks about. */
 export function summarizeStudent(student: Student): Record<string, unknown> {
@@ -46,6 +47,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
       description:
         'The signed-in PickUp Patrol parent account: name, email, last sign-in, and the students linked to it. Start here to discover student and school ids.',
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('lookup'),
     },
     async () => {
       const session = await client.getSession();
@@ -67,6 +69,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
       description:
         `Every student on the account, each with their weekly default dismissal plan and whether those defaults still need a parent review. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('lookup', { aliases: ['kids', 'children', 'students'] }),
     },
     async () => {
       const [students, review] = await Promise.all([
@@ -92,6 +95,7 @@ export function registerAccountTools(server: McpServer, client: PickUpPatrolClie
       description:
         `One student in full, including the default dismissal plan for each weekday. Pass raw: true for the untouched API record. ${UNTRUSTED_DESCRIPTION_SUFFIX}`,
       annotations: { readOnlyHint: true, openWorldHint: true },
+      _meta: schoolMeta('lookup'),
       inputSchema: z.object({
         student_id: z.number().int().describe('Student id, from pup_list_students'),
         raw: z
