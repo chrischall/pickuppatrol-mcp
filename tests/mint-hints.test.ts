@@ -204,6 +204,32 @@ describe('pup_list_plans view: brief', () => {
     expect(out.data[0]).toMatch(/… — 2026-11-02 — default$/);
   });
 
+  it('escapes a title that would read as a note or starts with a backslash', async () => {
+    const out = await brief([
+      {
+        PlanDate: '2026-11-02',
+        Plans: [
+          { FirstName: '-- none', TransportationName: 'Bus', IsDefault: true },
+          { FirstName: '\\Sam', TransportationName: 'Walker', IsDefault: false },
+          { FirstName: '--Kim', TransportationName: 'Car', IsDefault: true },
+        ],
+      },
+    ]);
+    expect(out.data).toEqual([
+      '\\-- none: Bus — 2026-11-02 — default',
+      '\\\\Sam: Walker — 2026-11-02 — changed',
+      '--Kim: Car — 2026-11-02 — default',
+    ]);
+  });
+
+  it('keeps an escaped long title within 120 characters', async () => {
+    const out = await brief([
+      { PlanDate: '2026-11-02', Plans: [{ FirstName: '-- ' + 'A'.repeat(120), TransportationName: 'Bus', IsDefault: true }] },
+    ]);
+    expect(out.data[0]!.length).toBeLessThanOrEqual(120);
+    expect(out.data[0]!.startsWith('\\-- AAA')).toBe(true);
+  });
+
   it('caps the lines and says so with an "-- N of M shown" note', async () => {
     const total = BRIEF_MAX_LINES + 5;
     const days: ParentPlanDay[] = Array.from({ length: total }, (_, i) => ({
