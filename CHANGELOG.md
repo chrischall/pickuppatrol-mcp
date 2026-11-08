@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.3.0...v1.3.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **deps:** Bump @chrischall/mcp-utils from 3.3.2 to 3.4.1 in the production-dependencies group ([#110](https://github.com/chrischall/pickuppatrol-mcp/issues/110)) ([7a34dbb](https://github.com/chrischall/pickuppatrol-mcp/commit/7a34dbb9f28d3dcb411df9808b87359f71887002))
+
 ## [1.3.0](https://github.com/chrischall/pickuppatrol-mcp/compare/v1.2.2...v1.3.0) (2026-11-04)
 
 
